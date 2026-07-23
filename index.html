@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slide Pot → ADC Input · Wiper Wiring Study</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #E9E9DF;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <noscript><p style="font-family:monospace;padding:24px">This sheet needs JavaScript to render.</p></noscript>
+
+  <script type="text/babel" data-type="module">
+    const { useMemo, useState } = React;
+
+    const VCC = 3.3;
+    const R9 = 10000;
+    const IMAX = VCC / R9;
+
+    const taperF = (x, t) => (t === "audio" ? (Math.pow(32.1, x) - 1) / 31.1 : x);
+    const vDivider = (f, rpot) => (VCC * rpot * f) / (R9 + rpot);
+    const vTied = (f, rpot) => (VCC * rpot * f) / (R9 + rpot * f);
+
+    function solve({ x, tied, taper, rpot, lifted }) {
+      const f = taperF(x, taper);
+      const lower = rpot * f;
+      const vIdeal = vDivider(f, rpot);
+
+      if (!tied) {
+        const i = VCC / (R9 + rpot);
+        return { f, i, vAIN0: lifted ? null : i * lower, vIdeal, iContact: 0, iUpper: i };
+      }
+
+      const series = lifted ? rpot : lower;
+      const i = VCC / (R9 + series);
+      return {
+        f,
+        i,
+        vAIN0: i * series,
+        vIdeal,
+        iContact: lifted ? 0 : i,
+        iUpper: lifted ? i : 0,
+      };
+    }
+
+    const C = {
+      paper: "#FCFCF8",
+      grid: "#E3E3D8",
+      ink: "#1C1C18",
+      rule: "#C9C9BE",
+      muted: "#77776C",
+      wire: "#8A8A80",
+      flow: "#E08A00",
+      comp: "#8B1A1A",
+      net: "#0A2FC4",
+      des: "#1A9E8F",
+      ann: "#B0179E",
+      body: "#ECECE1",
+    };
+
+    const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    const NARROW = "'Archivo Narrow', 'Arial Narrow', Arial, sans-serif";
+
+    const CSS = `
+    .sp-root{min-height:100vh;background:#E9E9DF;padding:26px 14px;color:#1C1C18;-webkit-font-smoothing:antialiased;}
+    .sp-root *, .sp-root *::before, .sp-root *::after{box-sizing:border-box;}
+    .sp-sheet{max-width:1020px;margin:0 auto;background:#FCFCF8;border:1.5px solid #1C1C18;padding:5px;}
+    .sp-in{border:1px solid #C9C9BE;background-image:radial-gradient(circle,#E3E3D8 1px,transparent 1px);background-size:10px 10px;}
+    .sp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:14px 16px 12px;border-bottom:1px solid #C9C9BE;}
+    .sp-title{font-family:${NARROW};font-weight:700;font-size:20px;letter-spacing:.05em;line-height:1.1;}
+    .sp-subtitle{font-family:${MONO};font-size:10.5px;color:#77776C;margin-top:5px;}
+    .sp-badge{font-family:${NARROW};font-weight:600;font-size:10px;letter-spacing:.14em;color:#77776C;border:1px solid #C9C9BE;background:#FCFCF8;padding:4px 9px;}
+    .sp-main{display:grid;grid-template-columns:10fr 11fr;}
+    .sp-colR{border-left:1px solid #C9C9BE;display:flex;flex-direction:column;}
+    .sp-cellhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:9px 12px 5px;font-family:${NARROW};font-weight:600;font-size:10.5px;letter-spacing:.14em;}
+    .sp-hsub{font-family:${MONO};font-weight:500;font-size:9.5px;letter-spacing:0;color:#77776C;}
+    .sp-schwrap{padding:2px 10px 12px;}
+    .sp-schwrap svg{max-width:380px;margin:0 auto;}
+    .sp-curvewrap{padding:2px 10px 12px;}
+    .sp-curvewrap svg{max-width:540px;margin:0 auto;}
+    .sp-svg{display:block;width:100%;height:auto;}
+    .sp-ros{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;border-bottom:1px solid #C9C9BE;}
+    .sp-ro{background:#FCFCF8;padding:9px 12px 11px;}
+    .sp-rolab{font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.12em;color:#77776C;}
+    .sp-roval{font-family:${MONO};font-weight:600;font-size:17px;margin-top:4px;white-space:nowrap;}
+    .sp-roval .u{font-size:11px;font-weight:500;color:#77776C;margin-left:4px;}
+    .sp-roval .fl{font-style:italic;font-weight:500;font-size:14px;color:#B0179E;}
+    .sp-legend{display:flex;gap:16px;flex-wrap:wrap;padding:0 12px 7px;font-family:${MONO};font-size:9.5px;color:#77776C;}
+    .sp-legend span{display:inline-flex;align-items:center;}
+    .sp-legend i{display:inline-block;width:16px;border-top:2px solid;margin-right:6px;}
+    .sp-notes{display:grid;grid-template-columns:3fr 2fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;}
+    .sp-notecell{background:#FCFCF8;padding:10px 14px 13px;}
+    .sp-notehead{font-family:${NARROW};font-weight:600;font-size:10px;letter-spacing:.14em;margin-bottom:5px;}
+    .sp-note{font-family:${MONO};font-size:10.5px;line-height:1.55;color:#3A3A32;display:flex;gap:8px;margin-top:5px;}
+    .sp-note b{font-weight:600;color:#77776C;flex:none;}
+    .sp-tb{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#C9C9BE;border-top:1.5px solid #1C1C18;}
+    .sp-field{background:#FCFCF8;padding:8px 10px 10px;min-width:0;}
+    .sp-fieldhead{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:7px;}
+    .sp-lab{font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.12em;color:#77776C;white-space:nowrap;}
+    .sp-val{font-family:${MONO};font-weight:600;font-size:11px;white-space:nowrap;}
+    .sp-seg{display:flex;border:1px solid #1C1C18;}
+    .sp-segbtn{flex:1;appearance:none;background:#FCFCF8;border:0;border-left:1px solid #C9C9BE;color:#1C1C18;font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.06em;padding:6px 2px;cursor:pointer;white-space:nowrap;}
+    .sp-segbtn:first-child{border-left:0;}
+    .sp-segbtn:hover{background:#F2F2E8;}
+    .sp-segbtn.on{background:#1C1C18;color:#FCFCF8;}
+    .sp-meta{display:grid;grid-template-columns:2fr 1.2fr .6fr .8fr .8fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;}
+    .sp-mcell{background:#FCFCF8;padding:5px 10px 6px;display:flex;gap:8px;align-items:baseline;min-width:0;}
+    .sp-mlab{font-family:${NARROW};font-weight:600;font-size:8.5px;letter-spacing:.14em;color:#77776C;}
+    .sp-mval{font-family:${MONO};font-weight:500;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    input.sp-range{-webkit-appearance:none;appearance:none;width:100%;height:20px;margin:0;background:transparent;cursor:ew-resize;}
+    input.sp-range::-webkit-slider-runnable-track{height:2px;background:#B9B9AC;}
+    input.sp-range::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;background:#FCFCF8;border:1.5px solid #1C1C18;border-radius:0;}
+    input.sp-range::-moz-range-track{height:2px;background:#B9B9AC;}
+    input.sp-range::-moz-range-thumb{width:10px;height:10px;background:#FCFCF8;border:1.5px solid #1C1C18;border-radius:0;}
+    .sp-root :focus-visible{outline:2px solid #0A2FC4;outline-offset:2px;}
+    .sp-cur{transition:stroke-opacity 160ms linear, fill-opacity 160ms linear;}
+    .sp-wiper{transition:transform 160ms ease;}
+    @media (max-width:760px){
+      .sp-main{grid-template-columns:1fr;}
+      .sp-colR{border-left:0;border-top:1px solid #C9C9BE;}
+      .sp-tb{grid-template-columns:repeat(2,1fr);}
+      .sp-tb .sp-field:last-child{grid-column:span 2;}
+      .sp-notes{grid-template-columns:1fr;}
+      .sp-meta{grid-template-columns:repeat(2,1fr);}
+      .sp-meta .sp-mcell:last-child{grid-column:span 2;}
+      .sp-title{font-size:17px;}
+    }
+    @media (prefers-reduced-motion:reduce){
+      .sp-root *{transition:none !important;animation:none !important;}
+    }
+    `;
+
+    function Wire({ d, o }) {
+      return (
+        <g>
+          <path d={d} stroke={C.wire} strokeWidth="2" fill="none" />
+          <path d={d} stroke={C.flow} strokeWidth="2" fill="none" className="sp-cur" style={{ strokeOpacity: o }} />
+        </g>
+      );
+    }
+
+    function CurrentArrow({ x, y, rot, o }) {
+      const scale = 0.4 + 0.8 * o;
+      return (
+        <g transform={`translate(${x}, ${y}) rotate(${rot})`}>
+          <g
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: "0 0",
+              opacity: o * 0.9,
+              transition: "transform 160ms ease, opacity 160ms linear"
+            }}
+          >
+            <line x1="-7" y1="0" x2="2" y2="0" stroke={C.flow} strokeWidth="2" strokeLinecap="round" />
+            <polygon points="1,-3.5 8,0 1,3.5" fill={C.flow} />
+          </g>
+        </g>
+      );
+    }
+
+    function Body({ x, y, w, h, o }) {
+      if (h < 0.6) return null;
+      return (
+        <g>
+          <rect x={x} y={y} width={w} height={h} fill={C.body} stroke={C.comp} strokeWidth="1.4" />
+          <rect x={x + 1} y={y + 1} width={w - 2} height={Math.max(0, h - 2)} fill={C.flow} className="sp-cur" style={{ fillOpacity: o }} />
+        </g>
+      );
+    }
+
+    function Seg({ label, value, options, onChange }) {
+      return (
+        <div className="sp-field">
+          <div className="sp-fieldhead">
+            <span className="sp-lab">{label}</span>
+          </div>
+          <div className="sp-seg" role="group" aria-label={label}>
+            {options.map((op) => (
+              <button
+                key={String(op.v)}
+                type="button"
+                className={"sp-segbtn" + (value === op.v ? " on" : "")}
+                aria-pressed={value === op.v}
+                onClick={() => onChange(op.v)}
+              >
+                {op.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function SliderField({ id, label, valueText, min, max, step, value, onChange, ariaText }) {
+      return (
+        <div className="sp-field">
+          <div className="sp-fieldhead">
+            <label className="sp-lab" htmlFor={id}>{label}</label>
+            <span className="sp-val">{valueText}</span>
+          </div>
+          <input
+            id={id}
+            className="sp-range"
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            aria-valuetext={ariaText}
+            onChange={(e) => onChange(Number(e.target.value))}
+          />
+        </div>
+      );
+    }
+
+    function Readout({ label, color, children }) {
+      return (
+        <div className="sp-ro">
+          <div className="sp-rolab">{label}</div>
+          <div className="sp-roval" style={color ? { color } : undefined}>{children}</div>
+        </div>
+      );
+    }
+
+    function Schematic({ r, tied, lifted, rpot }) {
+      const yTap = 236 - 140 * r.f;
+      const oT = Math.min(1, r.i / IMAX);
+      const oU = Math.min(1, r.iUpper / IMAX);
+      const oC = Math.min(1, r.iContact / IMAX);
+      const vTxt = r.vAIN0 == null ? "floating" : r.vAIN0.toFixed(3) + " V";
+      return (
+        <svg
+          className="sp-svg"
+          viewBox="0 0 300 290"
+          role="img"
+          aria-label="Schematic: 3.3 volt rail through R9 into the slide pot track, wiper to AIN0, with an optional tie wire from the wiper net back to pin 3. Amber shading shows current."
+        >
+          <Wire d="M100 22 V40" o={oT} />
+          <Wire d="M100 76 V84" o={oT} />
+          <Wire d="M100 84 V96" o={oU} />
+          <Wire d="M100 236 V252" o={oT} />
+          <Wire d={`M121 ${yTap} H196`} o={oC} />
+          <Wire d={`M196 84 V${yTap}`} o={oC} />
+          <Wire d="M196 84 H228.5" o={0} />
+
+          {tied && <Wire d="M100 84 H196" o={oC} />}
+
+          <Body x={88} y={40} w={24} h={36} o={oT} />
+          <Body x={88} y={96} w={24} h={Math.max(0, yTap - 96)} o={oU} />
+          <Body x={88} y={yTap} w={24} h={236 - yTap} o={oT} />
+
+          <CurrentArrow x={118} y={31} rot={90} o={oT} />
+          <CurrentArrow x={118} y={80} rot={90} o={oT} />
+          <CurrentArrow x={118} y={(96 + yTap) / 2} rot={90} o={oU} />
+          <CurrentArrow x={118} y={(yTap + 236) / 2} rot={90} o={oT} />
+          <CurrentArrow x={118} y={244} rot={90} o={oT} />
+
+          {tied && <CurrentArrow x={148} y={72} rot={0} o={oC} />}
+          <CurrentArrow x={208} y={(84 + yTap) / 2} rot={90} o={oC} />
+          <CurrentArrow x={158.5} y={yTap - 12} rot={180} o={oC} />
+
+          <line x1="91" y1="22" x2="109" y2="22" stroke={C.ink} strokeWidth="1.6" />
+          <line x1="90" y1="252" x2="110" y2="252" stroke={C.ink} strokeWidth="1.6" />
+          <line x1="94" y1="257" x2="106" y2="257" stroke={C.ink} strokeWidth="1.4" />
+          <line x1="98" y1="262" x2="102" y2="262" stroke={C.ink} strokeWidth="1.2" />
+
+          <g className="sp-wiper" style={{ transform: lifted ? "translate(6px,0)" : "translate(0,0)" }}>
+            <polygon points={`112,${yTap} 121,${yTap - 5.5} 121,${yTap + 5.5}`} fill={C.ink} />
+          </g>
+
+          {!lifted && <circle cx="112" cy={yTap} r="2.4" fill={C.ink} />}
+          {tied && <circle cx="100" cy="84" r="2.4" fill={C.ink} />}
+          {tied && <circle cx="196" cy="84" r="2.4" fill={C.ink} />}
+          <circle cx="232" cy="84" r="3.2" fill={C.paper} stroke={C.ink} strokeWidth="1.4" />
+
+          <text x="100" y="14" textAnchor="middle" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.net}>+3.3V</text>
+
+          <text x="82" y="53" textAnchor="end" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.des}>R9</text>
+          <text x="82" y="65" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>10k</text>
+
+          <text x="82" y="158" textAnchor="end" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.des}>R1</text>
+          <text x="82" y="170" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>{(rpot / 1000).toFixed(1)}k</text>
+
+          <text x="80" y="103" textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>3</text>
+          <text x="80" y="234" textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>1</text>
+          <text x="127" y={yTap + 15} fontFamily={MONO} fontSize="7.5" fill={C.muted}>2</text>
+
+          {tied && <text x="148" y="93" textAnchor="middle" fontFamily={MONO} fontSize="9" fontStyle="italic" fill={C.ann}>tie</text>}
+
+          <text x="238" y="80" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.net}>AIN0</text>
+          <text x="238" y="95" fontFamily={MONO} fontSize="9" fontWeight="600" fontStyle={r.vAIN0 == null ? "italic" : "normal"} fill={r.vAIN0 == null ? C.ann : C.ink}>{vTxt}</text>
+        </svg>
+      );
+    }
+
+    const CH = { W: 300, H: 192, ML: 32, MR: 10, MT: 10, MB: 26, VMAX: 1.85 };
+    const chX = (x) => CH.ML + x * (CH.W - CH.ML - CH.MR);
+    const chY = (v) => CH.MT + (1 - v / CH.VMAX) * (CH.H - CH.MT - CH.MB);
+
+    function Curve({ taper, rpot, travel, vNow, tied }) {
+      const { W, H, ML, MR, MT, MB } = CH;
+      const paths = useMemo(() => {
+        let u = "", t = "";
+        for (let j = 0; j <= 100; j++) {
+          const f = taperF(j / 100, taper);
+          const px = chX(j / 100).toFixed(1);
+          u += (j ? " L " : "M ") + px + " " + chY(vDivider(f, rpot)).toFixed(1);
+          t += (j ? " L " : "M ") + px + " " + chY(vTied(f, rpot)).toFixed(1);
+        }
+        return { u, t };
+      }, [taper, rpot]);
+      return (
+        <svg
+          className="sp-svg"
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label="Transfer curve: AIN0 voltage against travel for both wirings, with the live operating point marked."
+        >
+          {[0.5, 1, 1.5].map((v) => (
+            <line key={v} x1={ML} x2={W - MR} y1={chY(v)} y2={chY(v)} stroke={C.rule} strokeWidth="1" />
+          ))}
+          {[0.25, 0.5, 0.75].map((x) => (
+            <line key={x} x1={chX(x)} x2={chX(x)} y1={MT} y2={H - MB} stroke={C.rule} strokeWidth="1" />
+          ))}
+          <path d={`M ${ML} ${MT} L ${ML} ${H - MB} L ${W - MR} ${H - MB}`} fill="none" stroke={C.ink} strokeWidth="1.2" />
+          {[0, 0.5, 1, 1.5].map((v) => (
+            <text key={v} x={ML - 5} y={chY(v) + 3} textAnchor="end" fontFamily={MONO} fontSize="8" fill={C.muted}>{v ? v.toFixed(1) : "0"}</text>
+          ))}
+          <text x={ML - 5} y={MT + 1} textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>V</text>
+          {[0, 25, 50, 75, 100].map((p) => (
+            <text key={p} x={chX(p / 100)} y={H - MB + 13} textAnchor="middle" fontFamily={MONO} fontSize="8" fill={C.muted}>{p}</text>
+          ))}
+          <text x={(ML + W - MR) / 2} y={H - 3} textAnchor="middle" fontFamily={NARROW} fontSize="7.5" letterSpacing="0.12em" fill={C.muted}>TRAVEL %</text>
+          <path d={paths.u} fill="none" stroke={C.des} strokeWidth="1.8" style={{ opacity: tied ? 0.2 : 1, transition: "opacity 160ms linear" }} />
+          <path d={paths.t} fill="none" stroke={C.comp} strokeWidth="1.8" style={{ opacity: tied ? 1 : 0.2, transition: "opacity 160ms linear" }} />
+          {vNow != null && (
+            <g>
+              <line x1={chX(travel / 100)} y1={chY(vNow)} x2={chX(travel / 100)} y2={chY(0)} stroke={C.muted} strokeWidth="1" strokeDasharray="3 3" />
+              <circle cx={chX(travel / 100)} cy={chY(vNow)} r="3.4" fill={C.ann} stroke={C.paper} strokeWidth="1.3" />
+            </g>
+          )}
+        </svg>
+      );
+    }
+
+    function SlidePotAdcSheet() {
+      const [travel, setTravel] = useState(50);
+      const [tied, setTied] = useState(false);
+      const [taper, setTaper] = useState("linear");
+      const [rpot, setRpot] = useState(10000);
+      const [lifted, setLifted] = useState(false);
+
+      const r = useMemo(
+        () => solve({ x: travel / 100, tied, taper, rpot, lifted }),
+        [travel, tied, taper, rpot, lifted]
+      );
+      const err = r.vAIN0 == null ? null : ((e) => (Math.abs(e) < 5e-7 ? 0 : e))((r.vAIN0 - r.vIdeal) * 1000);
+
+      return (
+        <div className="sp-root">
+          <style>{CSS}</style>
+          <div className="sp-sheet">
+            <div className="sp-in">
+              <header className="sp-head">
+                <div>
+                  <div className="sp-title">SLIDE POT → ADC INPUT</div>
+                  <div className="sp-subtitle">Bourns PTB0143 · R9 10 kΩ to +3.3 V · pin 1 GND · wiper pin 2 → AIN0 (hi-Z)</div>
+                </div>
+                <div className="sp-badge">DIVIDER VS WIPER TIED TO PIN 3</div>
+              </header>
+
+              <div className="sp-main">
+                <section>
+                  <div className="sp-cellhead">
+                    <span>SCHEMATIC</span>
+                    <span className="sp-hsub">{(tied ? "mode: tied" : "mode: divider") + (lifted ? " · contact lifted" : "")}</span>
+                  </div>
+                  <div className="sp-schwrap">
+                    <Schematic r={r} tied={tied} lifted={lifted} rpot={rpot} />
+                  </div>
+                </section>
+
+                <section className="sp-colR">
+                  <div className="sp-cellhead">
+                    <span>OPERATING POINT</span>
+                    <span className="sp-hsub">dc steady state</span>
+                  </div>
+                  <div className="sp-ros">
+                    <Readout label="V (AIN0)">
+                      {r.vAIN0 == null ? <span className="fl">floating</span> : <>{r.vAIN0.toFixed(3)}<span className="u">V</span></>}
+                    </Readout>
+                    <Readout
+                      label="DEVIATION FROM IDEAL"
+                      color={err == null ? C.muted : Math.abs(err) < 0.05 ? C.des : C.comp}
+                    >
+                      {err == null ? "n/a" : <>{err.toFixed(1)}<span className="u">mV</span></>}
+                    </Readout>
+                    <Readout label="I · WIPER CONTACT">{(r.iContact * 1e6).toFixed(1)}<span className="u">µA</span></Readout>
+                    <Readout label="I · UPPER SEGMENT">{(r.iUpper * 1e6).toFixed(1)}<span className="u">µA</span></Readout>
+                  </div>
+                  <div className="sp-cellhead">
+                    <span>TRANSFER CURVE</span>
+                    <span className="sp-hsub">V(AIN0) vs travel</span>
+                  </div>
+                  <div className="sp-legend">
+                    <span style={{ opacity: tied ? 0.4 : 1, transition: "opacity 160ms linear" }}><i style={{ borderTopColor: C.des }} />VOLTAGE DIVIDER</span>
+                    <span style={{ opacity: tied ? 1 : 0.4, transition: "opacity 160ms linear" }}><i style={{ borderTopColor: C.comp }} />WIPER TIED TO PIN 3</span>
+                  </div>
+                  <div className="sp-curvewrap">
+                    <Curve taper={taper} rpot={rpot} travel={travel} vNow={r.vAIN0} tied={tied} />
+                  </div>
+                </section>
+              </div>
+
+              <div className="sp-notes">
+                <div className="sp-notecell">
+                  <div className="sp-notehead">NOTES</div>
+                  <div className="sp-note"><b>1.</b><span>Steady state DC. C5 in the original schematic is an open at DC and is left off the sheet.</span></div>
+                  <div className="sp-note"><b>2.</b><span>Residual resistance (500 Ω or 1% max per the datasheet) is not modelled, so both curves reach exactly 0 V at zero travel where a real part will not.</span></div>
+                  <div className="sp-note"><b>3.</b><span>The audio taper is approximated as an exponential through 15% at mid travel. Real A tapers are piecewise-linear segments, so treat that curve as the shape rather than the spec.</span></div>
+                </div>
+                <div className="sp-notecell">
+                  <div className="sp-notehead">TRY THIS</div>
+                  <div className="sp-note"><b>▸</b><span>Select TIED TO PIN 3 and sweep travel 0 → 100%. The loop current falls from 330 µA to 165 µA (R1 at 10 k), all of it through the wiper contact.</span></div>
+                  <div className="sp-note"><b>▸</b><span>The tied transfer curve bows above the divider line, so the deviation readout runs positive everywhere except the endpoints.</span></div>
+                  <div className="sp-note"><b>▸</b><span>Toggle WIPER CONTACT to LIFTED in each mode. The divider leaves AIN0 floating, while the tie snaps it to the pin 3 voltage and the marker jumps off the curve.</span></div>
+                </div>
+              </div>
+
+              <div className="sp-tb">
+                <SliderField id="sp-travel" label="TRAVEL" valueText={travel + " %"} min={0} max={100} step={1} value={travel} onChange={setTravel} ariaText={travel + " percent"} />
+                <Seg label="WIPER (PIN 2)" value={tied} onChange={setTied} options={[{ v: false, label: "DIVIDER" }, { v: true, label: "TIED TO PIN 3" }]} />
+                <Seg label="TAPER" value={taper} onChange={setTaper} options={[{ v: "linear", label: "B · LINEAR" }, { v: "audio", label: "A · AUDIO" }]} />
+                <SliderField id="sp-rpot" label="TRACK R1 · ±20 %" valueText={(rpot / 1000).toFixed(1) + " kΩ"} min={8000} max={12000} step={100} value={rpot} onChange={setRpot} ariaText={(rpot / 1000).toFixed(1) + " kilohms"} />
+                <Seg label="WIPER CONTACT" value={lifted} onChange={setLifted} options={[{ v: false, label: "ON TRACK" }, { v: true, label: "LIFTED" }]} />
+              </div>
+
+              <div className="sp-meta">
+                <div className="sp-mcell"><span className="sp-mlab">TITLE</span><span className="sp-mval">WIPER WIRING STUDY</span></div>
+                <div className="sp-mcell"><span className="sp-mlab">DWG NO</span><span className="sp-mval">SP-ADC-01</span></div>
+                <div className="sp-mcell"><span className="sp-mlab">REV</span><span className="sp-mval">C</span></div>
+                <div className="sp-mcell"><span className="sp-mlab">SCALE</span><span className="sp-mval">NTS</span></div>
+                <div className="sp-mcell"><span className="sp-mlab">SHEET</span><span className="sp-mval">1 / 1</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<SlidePotAdcSheet />);
+  </script>
+</body>
+</html>
