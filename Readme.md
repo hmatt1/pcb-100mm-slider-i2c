@@ -1,5 +1,20 @@
 # pcb-100mm-slider-i2c
 
+Preface:
+
+> Hi everyone!
+>
+> This blog post explains how to make a PCB from scratch.
+>
+> It is pretty detailed on the technical side, with a goal of demistifying a lot about hardware.
+>
+> It also talks about my experience working with [PCBWay](https://www.pcbway.com/), who was kind enough to fund this project. I feel like a lot of people have already heard of them since it is one of the best ways to get a custom PCB built. They were supportive and gave me lots of freedom with this project.
+>
+> Thanks for reading and I hope you enjoy :) 
+
+
+# 
+
 This [slider](https://www.adafruit.com/product/5295) from Adafruit is cool, but it has a problem. It is too small.
 
 ![Adafruit Sliders](./assets/IMG_1242.JPG)
@@ -21,11 +36,19 @@ Life: 15,000 Cycles
 
 15k cycles is pretty nice! I've already used 3 of them. 14,997 until it starts to wear out! Wahoo!
 
-It's an awesome party, but we still have a problem. It's not attached to a PCB, so it doesn't have an I2C interface to actually start working with it.
+It's an awesome part, but we still have a problem. It's not attached to a PCB, so it doesn't have an I2C interface to actually start working with it.
 
-I often see [PCBWay](https://www.pcbway.com/) sponsoring YouTubers that I like, so I figured that would be a great direction to go with them for this project too!
+So obviously, I'm going to have to build that part myself. Fortunately, we have a great path forward.
+
+After my [last blog post](https://hackaday.io/project/205240-usb-to-i2c-demo), [Aran](https://x.com/pcbway_aran) from [PCBWay](https://www.pcbway.com/) messaged me to see if [PCBWay](https://www.pcbway.com/) could sponsor my next project. 
+
+**This was a really delightful surprise!**
+
+I never expected to get that kind of recognition for my [last project](https://hackaday.io/project/205240-usb-to-i2c-demo). I often see [PCBWay](https://www.pcbway.com/) sponsoring YouTubers that I like too.
 
 ![pcbway](./assets/pcbway.png)
+
+
 
 There's a lot to explain before we can send the design to PCBWay.
 
