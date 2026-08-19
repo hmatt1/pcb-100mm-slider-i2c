@@ -371,9 +371,6 @@
           <text x={xBack + 4} y={yTap + 14} fontFamily={MONO} fontSize="8" fill={C.muted}>2</text>
 
           <text x={SPINE} y="16" textAnchor="middle" fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>+3.3V</text>
-          {rheostat && (
-            <text x="132" y="86" fontFamily={MONO} fontSize="8" fontStyle="italic" fill={C.rhe}>tie 2→3</text>
-          )}
           <text x="262" y={TIE_Y - 4} fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>AIN0</text>
           <text
             x="262" y={TIE_Y + 11} fontFamily={MONO} fontSize="9.5" fontWeight="600"
@@ -520,10 +517,10 @@
                   
                   <div className="sp-subtitle">
                     <a href="https://github.com/hmatt1/pcb-100mm-slider-i2c" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none', color: 'inherit', lineHeight: 1 }}>
+                      <span style={{ textDecoration: 'underline' }}>Read the blog post</span>
                       <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0, display: 'block', position: 'relative', top: '1px' }}>
                         <path fillRule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07-.55-.17-.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
                       </svg>
-                      <span style={{ textDecoration: 'underline' }}>Read the blog post</span>
                     </a>
                   </div>
                 </div>
