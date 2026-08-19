@@ -8,18 +8,21 @@ Preface:
 >
 > It is pretty detailed on the technical side, with a goal of demistifying a lot about hardware.
 >
-> It also talks about my experience working with [PCBWay](https://www.pcbway.com/), who was kind enough to fund this project. I feel like a lot of people have already heard of them since it is one of the best ways to get a custom PCB built. They were supportive and gave me lots of freedom with this project.
+> It also talks about my experience working with [PCBWay](https://www.pcbway.com/), who was kind enough to fund this project. They were supportive and gave me lots of freedom too. PCBWay was a great
+> way to get my custom PCB design turned into reality, so I included a lot of detail on how that is done to hopefully help anyone who is new to PCB design.
 >
 > Thanks for reading and I hope you enjoy :) 
 
 
-# 
+----
+
+# Building a slider PCB from scratch
 
 This [slider](https://www.adafruit.com/product/5295) from Adafruit is cool, but it has a problem. It is too small.
 
 ![Adafruit Sliders](./assets/IMG_1242.JPG)
 
-It has 65mm of travel distance for the slider movement.
+It only has 65mm of travel distance for the slider movement.
 
 Fortunately, it was easy to find a longer slider.
 
@@ -44,7 +47,7 @@ After my [last blog post](https://hackaday.io/project/205240-usb-to-i2c-demo), [
 
 **This was a really delightful surprise!**
 
-I never expected to get that kind of recognition for my [last project](https://hackaday.io/project/205240-usb-to-i2c-demo). I often see [PCBWay](https://www.pcbway.com/) sponsoring YouTubers that I like too.
+I never expected to get that kind of recognition for my [last project](https://hackaday.io/project/205240-usb-to-i2c-demo). Also, I do often see [PCBWay](https://www.pcbway.com/) sponsoring YouTubers that I like, so I was excited that they reached out.
 
 ![pcbway](./assets/pcbway.png)
 
@@ -102,7 +105,7 @@ Second, which is also the main reason it's useful, is being able to use the slid
 
 More importantly, I vibe coded this beautiful web demo to illustrate the difference (works better on desktop). Not 100% sure if the numbers it shows are right, but it's a good illustration of how the current flows.
 
------ DEMO HERE ------
+----- DEMO HERE!!!! TODO ------
 
 ![](./assets/voltage%20divider%20vs%20rheostat.png)
 
@@ -244,10 +247,89 @@ and more guidelines specific to our chip:
 
 -----
 
-Anyway, in Kicad, you want to set up each part in the schematic with the symbol properties. It looks like this:
+Anyway, in Kicad, you want to set up each part in the schematic with the symbol properties.
+
+So if I a want to assign C1 to a part, I would open up symbol properties and fill them out.
+
+It looks like this:
 
 ![](./assets/symbol%20properties.png)
 
 This is super important because it will know what footprints to use with which parts of the schematic. And it will let the PCBWay Kicad plugin export the BOM automatically. But more on that later!
+
+So basically, we are tying these things together:
+
+```
+Schematic Symbol -> Part Number -> Footprint 
+```
+
+So if you look at the menu in Kicad, it should start making sense.
+
+![kicad](./assets/kicad.png)
+
+
+Schematic is the actual diagram. Symbols are symbols on the diagram. Footprints are the geometry that will attach specific parts to the board.
+
+And then PCB Editor is the fun part, where we design the layout of the board itself.
+
+You import the schematic into the PCB Editor, and then draw traces (wires) to connect everything together.
+
+Kicad already knows how your schematic is set up, so it makes sure you can't accidentally connect things that aren't connected in the schematic.
+
+Before you jump into creating the whole PCB design, you need to set up the design rules.
+
+PCBWay has a nice article about Design Rules, and even have the files available to download and import the rules into Kicad.
+
+[PCBWay Design Rules](https://www.pcbway.com/pcb_prototype/PCB_Design_Rule_Check.html)
+
+You'll also want to pay attention to what your manufacturer has available, so you can make sure the rules are correct for that too.
+
+For example, PCBWay lets you select the min spacing and min hole size when [ordering online](https://www.pcbway.com/orderonline.aspx).
+
+![](./assets/min%20hole%20size.png)
+
+So if your min hole size is .3mmm, you don't want to design a PCB with smaller holes  than that. Basically, you want to know all the dimensions of everything in your design.
+
+I think it's a really good idea to pick which manufacturer you want to make your PCB before doing the design. Read through all the options available, so you can ensure your design will meet what they are capable of building.
+
+If you think back to the 1mm capacitor I picked out as a part, not everyone is going to be able to solder that to a board. 
+
+I did look up the [assembly capabilities](https://www.pcbway.com/pcb_prototype/PCB_assembly_Capabilities.html) for PCBWay, to verify this in the documentation:
+
+> we can accept components as small as 01005, 0201,0402.
+
+This means they will deal with my super tiny capacitor! I do not want to try to solder that.
+
+![](./assets/full%20pcb%20design.png)
+
+And here is the rendered version:
+
+![](./assets/rendered%20pcb%20design.png)
+
+You can do 3D models of the parts too, but I decided to skip that and trust the footprints. It is a good idea though if you want to take time to verify things will fit together properly in real life.
+
+For exporting files for PCBWay, you can use the [PCBWay Fabrication Toolkit plug-in for Kicad](https://github.com/pcbway/PCBWay-Plug-in-for-Kicad).
+
+![](./assets/pcbway%20fab%20toolkit%20kicad.png)
+
+You can use when you're in the PCB Editor from the Tools menu.
+
+![](./assets/tools%20pcbway%20plugin.png)
+
+
+One click and it will export all the files you need.
+
+![](./assets/pcbway%20export.png)
+
+Just upload the files to PCBWay and you're good to go.
+
+I'll share what my order looked like here too:
+
+![](./assets/pcbway%20order.png)
+
+The order includes all the parts and assembly too. I will be getting 5 boards, fully assembled, ready to test out as soon as they arrive at my house! I don't have to mess with any soldering and PCBWay went through the work of sourcing all the different parts. By the way, I did only use [Digikey](https://www.digikey.com/) to find what parts they have in stock. PCBWay ordered parts directly from them for my board, and that was included in the cost of the order.
+
+It was nice that I could just focus on the design.
+
 
 
