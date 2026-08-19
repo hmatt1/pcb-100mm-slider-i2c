@@ -3,20 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Slide Pot → ADC Input · Wiper Wiring Study</title>
+  <title>Slide Pot → Divider vs Rheostat</title>
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #E9E9DF;
-    }
+    body { margin: 0; padding: 0; background: #C2CBC7; }
   </style>
 </head>
 <body>
@@ -26,185 +22,244 @@
   <script type="text/babel" data-type="module">
     const { useMemo, useState } = React;
 
+    /* ---- model ------------------------------------------------------- */
+
     const VCC = 3.3;
     const R9 = 10000;
-    const IMAX = VCC / R9;
+    const R1 = 10000;
+    const IMAX = VCC / R9;                 // 330 µA, worst case loop current
+    const V_FS = (VCC * R1) / (R9 + R1);   // 1.65 V, full scale for both wirings
 
-    const taperF = (x, t) => (t === "audio" ? (Math.pow(32.1, x) - 1) / 31.1 : x);
-    const vDivider = (f, rpot) => (VCC * rpot * f) / (R9 + rpot);
-    const vTied = (f, rpot) => (VCC * rpot * f) / (R9 + rpot * f);
+    // x = travel fraction, 0 at pin 1 (GND), 1 at pin 3.
+    // The lower segment always carries the whole loop current. The upper
+    // segment and the wiper contact swap: exactly one of them is live.
+    function solve({ x, rheostat, lifted }) {
+      const lower = R1 * x;
 
-    function solve({ x, tied, taper, rpot, lifted }) {
-      const f = taperF(x, taper);
-      const lower = rpot * f;
-      const vIdeal = vDivider(f, rpot);
-
-      if (!tied) {
-        const i = VCC / (R9 + rpot);
-        return { f, i, vAIN0: lifted ? null : i * lower, vIdeal, iContact: 0, iUpper: i };
+      if (!rheostat) {
+        const i = VCC / (R9 + R1);
+        return { x, i, iLower: i, iUpper: i, iWiper: 0, vAIN0: lifted ? null : i * lower };
       }
-
-      const series = lifted ? rpot : lower;
-      const i = VCC / (R9 + series);
-      return {
-        f,
-        i,
-        vAIN0: i * series,
-        vIdeal,
-        iContact: lifted ? 0 : i,
-        iUpper: lifted ? i : 0,
-      };
+      if (lifted) {
+        // Contact open, so the loop reroutes through the upper segment.
+        // The tie still reaches pin 3, so AIN0 reports a voltage while
+        // carrying no current.
+        const i = VCC / (R9 + R1);
+        return { x, i, iLower: i, iUpper: i, iWiper: 0, vAIN0: i * R1 };
+      }
+      // Tie shorts the upper segment, so the whole loop runs through the contact.
+      const i = VCC / (R9 + lower);
+      return { x, i, iLower: i, iUpper: 0, iWiper: i, vAIN0: i * lower };
     }
 
+    const vDivider = (x) => (VCC * R1 * x) / (R9 + R1);
+    const vRheostat = (x) => (VCC * R1 * x) / (R9 + R1 * x);
+
+    const uA = (i) => (i * 1e6).toFixed(0);
+
+    // Any live branch stays clearly visible; a dead branch reads as dead.
+    const flowOpacity = (i) => (i > 0 ? 0.32 + 0.68 * Math.min(1, i / IMAX) : 0);
+    // Dashes march faster when more current is moving.
+    const flowSpeed = (i) => (i > 0 ? (1.4 * IMAX) / i : 0);
+
+    /* ---- tokens ------------------------------------------------------ */
+
     const C = {
-      paper: "#FCFCF8",
-      grid: "#E3E3D8",
-      ink: "#1C1C18",
-      rule: "#C9C9BE",
-      muted: "#77776C",
-      wire: "#8A8A80",
-      flow: "#E08A00",
-      comp: "#8B1A1A",
-      net: "#0A2FC4",
-      des: "#1A9E8F",
-      ann: "#B0179E",
-      body: "#ECECE1",
+      surface: "#C2CBC7",
+      paper: "#FBFCFA",
+      ink: "#15201E",
+      text: "#3A4744",
+      muted: "#63706C",
+      dead: "#87938F",
+      hair: "#DFE4E0",
+      edge: "#B4BDB8",
+      wire: "#8E9995",
+      flow: "#E07C10",
+      flow2: "#F7C070",
+      div: "#0F766E",
+      rhe: "#A32F2F",
+      alert: "#A81D8E",
+      fill: "#EDEFEA",
     };
 
     const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    const NARROW = "'Archivo Narrow', 'Arial Narrow', Arial, sans-serif";
+    const COND = "'IBM Plex Sans Condensed', 'Arial Narrow', Arial, sans-serif";
+    const SANS = "'IBM Plex Sans', system-ui, -apple-system, Segoe UI, sans-serif";
 
     const CSS = `
-    .sp-root{min-height:100vh;background:#E9E9DF;padding:26px 14px;color:#1C1C18;-webkit-font-smoothing:antialiased;}
+    .sp-root{min-height:100vh;background:${C.surface};padding:34px 16px 46px;color:${C.ink};-webkit-font-smoothing:antialiased;}
     .sp-root *, .sp-root *::before, .sp-root *::after{box-sizing:border-box;}
-    .sp-sheet{max-width:1020px;margin:0 auto;background:#FCFCF8;border:1.5px solid #1C1C18;padding:5px;}
-    .sp-in{border:1px solid #C9C9BE;background-image:radial-gradient(circle,#E3E3D8 1px,transparent 1px);background-size:10px 10px;}
-    .sp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:14px 16px 12px;border-bottom:1px solid #C9C9BE;}
-    .sp-title{font-family:${NARROW};font-weight:700;font-size:20px;letter-spacing:.05em;line-height:1.1;}
-    .sp-subtitle{font-family:${MONO};font-size:10.5px;color:#77776C;margin-top:5px;}
-    .sp-badge{font-family:${NARROW};font-weight:600;font-size:10px;letter-spacing:.14em;color:#77776C;border:1px solid #C9C9BE;background:#FCFCF8;padding:4px 9px;}
-    .sp-main{display:grid;grid-template-columns:10fr 11fr;}
-    .sp-colR{border-left:1px solid #C9C9BE;display:flex;flex-direction:column;}
-    .sp-cellhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:9px 12px 5px;font-family:${NARROW};font-weight:600;font-size:10.5px;letter-spacing:.14em;}
-    .sp-hsub{font-family:${MONO};font-weight:500;font-size:9.5px;letter-spacing:0;color:#77776C;}
-    .sp-schwrap{padding:2px 10px 12px;}
-    .sp-schwrap svg{max-width:380px;margin:0 auto;}
-    .sp-curvewrap{padding:2px 10px 12px;}
-    .sp-curvewrap svg{max-width:540px;margin:0 auto;}
-    .sp-svg{display:block;width:100%;height:auto;}
-    .sp-ros{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;border-bottom:1px solid #C9C9BE;}
-    .sp-ro{background:#FCFCF8;padding:9px 12px 11px;}
-    .sp-rolab{font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.12em;color:#77776C;}
-    .sp-roval{font-family:${MONO};font-weight:600;font-size:17px;margin-top:4px;white-space:nowrap;}
-    .sp-roval .u{font-size:11px;font-weight:500;color:#77776C;margin-left:4px;}
-    .sp-roval .fl{font-style:italic;font-weight:500;font-size:14px;color:#B0179E;}
-    .sp-legend{display:flex;gap:16px;flex-wrap:wrap;padding:0 12px 7px;font-family:${MONO};font-size:9.5px;color:#77776C;}
-    .sp-legend span{display:inline-flex;align-items:center;}
-    .sp-legend i{display:inline-block;width:16px;border-top:2px solid;margin-right:6px;}
-    .sp-notes{display:grid;grid-template-columns:3fr 2fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;}
-    .sp-notecell{background:#FCFCF8;padding:10px 14px 13px;}
-    .sp-notehead{font-family:${NARROW};font-weight:600;font-size:10px;letter-spacing:.14em;margin-bottom:5px;}
-    .sp-note{font-family:${MONO};font-size:10.5px;line-height:1.55;color:#3A3A32;display:flex;gap:8px;margin-top:5px;}
-    .sp-note b{font-weight:600;color:#77776C;flex:none;}
-    .sp-tb{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#C9C9BE;border-top:1.5px solid #1C1C18;}
-    .sp-field{background:#FCFCF8;padding:8px 10px 10px;min-width:0;}
-    .sp-fieldhead{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:7px;}
-    .sp-lab{font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.12em;color:#77776C;white-space:nowrap;}
-    .sp-val{font-family:${MONO};font-weight:600;font-size:11px;white-space:nowrap;}
-    .sp-seg{display:flex;border:1px solid #1C1C18;}
-    .sp-segbtn{flex:1;appearance:none;background:#FCFCF8;border:0;border-left:1px solid #C9C9BE;color:#1C1C18;font-family:${NARROW};font-weight:600;font-size:9.5px;letter-spacing:.06em;padding:6px 2px;cursor:pointer;white-space:nowrap;}
+    .sp-sheet{max-width:1040px;margin:0 auto;background:${C.paper};border:1px solid ${C.edge};padding:6px;
+      box-shadow:0 1px 1px rgba(21,32,30,.05), 0 14px 34px -10px rgba(21,32,30,.26);}
+    .sp-in{border:1px solid ${C.edge};}
+
+    /* header */
+    .sp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;padding:17px 18px 15px;border-bottom:1px solid ${C.edge};}
+    .sp-title{font-family:${COND};font-weight:700;font-size:26px;letter-spacing:.012em;line-height:1;}
+    .sp-title .dim{color:${C.muted};font-weight:600;margin-bottom:7px;}
+    .sp-subtitle{font-family:${MONO};font-size:14px;margin-top:7px;color:${C.muted};letter-spacing:-.01em;}
+    .sp-eq{border:1px solid ${C.hair};background:${C.paper};padding:7px 11px;}
+    .sp-eqrow{display:flex;gap:12px;align-items:baseline;opacity:.34;transition:opacity 180ms linear;}
+    .sp-eqrow + .sp-eqrow{margin-top:4px;}
+    .sp-eqrow.on{opacity:1;}
+    .sp-eqk{font-family:${COND};font-weight:700;font-size:9.5px;letter-spacing:.16em;color:${C.muted};width:66px;flex:none;}
+    .sp-eqrow.on .sp-eqk{color:var(--k);}
+    .sp-eqv{font-family:${MONO};font-size:10.5px;white-space:nowrap;}
+
+    /* controls */
+    .sp-tb{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:1px;background:${C.hair};border-bottom:1px solid ${C.edge};}
+    .sp-field{background:${C.paper};padding:11px 15px 13px;min-width:0;}
+    .sp-fieldhead{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:9px;}
+    .sp-lab{font-family:${COND};font-weight:700;font-size:10px;letter-spacing:.16em;color:${C.muted};white-space:nowrap;}
+    .sp-val{font-family:${MONO};font-weight:600;font-size:12px;white-space:nowrap;}
+    .sp-seg{display:flex;border:1px solid ${C.ink};}
+    .sp-segbtn{flex:1;appearance:none;background:${C.paper};border:0;border-left:1px solid ${C.hair};color:${C.text};
+      font-family:${COND};font-weight:700;font-size:11px;letter-spacing:.09em;padding:7px 2px;cursor:pointer;white-space:nowrap;
+      transition:background 140ms linear,color 140ms linear;}
     .sp-segbtn:first-child{border-left:0;}
-    .sp-segbtn:hover{background:#F2F2E8;}
-    .sp-segbtn.on{background:#1C1C18;color:#FCFCF8;}
-    .sp-meta{display:grid;grid-template-columns:2fr 1.2fr .6fr .8fr .8fr;gap:1px;background:#C9C9BE;border-top:1px solid #C9C9BE;}
-    .sp-mcell{background:#FCFCF8;padding:5px 10px 6px;display:flex;gap:8px;align-items:baseline;min-width:0;}
-    .sp-mlab{font-family:${NARROW};font-weight:600;font-size:8.5px;letter-spacing:.14em;color:#77776C;}
-    .sp-mval{font-family:${MONO};font-weight:500;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    input.sp-range{-webkit-appearance:none;appearance:none;width:100%;height:20px;margin:0;background:transparent;cursor:ew-resize;}
-    input.sp-range::-webkit-slider-runnable-track{height:2px;background:#B9B9AC;}
-    input.sp-range::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;background:#FCFCF8;border:1.5px solid #1C1C18;border-radius:0;}
-    input.sp-range::-moz-range-track{height:2px;background:#B9B9AC;}
-    input.sp-range::-moz-range-thumb{width:10px;height:10px;background:#FCFCF8;border:1.5px solid #1C1C18;border-radius:0;}
-    .sp-root :focus-visible{outline:2px solid #0A2FC4;outline-offset:2px;}
-    .sp-cur{transition:stroke-opacity 160ms linear, fill-opacity 160ms linear;}
-    .sp-wiper{transition:transform 160ms ease;}
-    @media (max-width:760px){
+    .sp-segbtn:hover{background:#F1F4F0;}
+    .sp-segbtn.on{background:var(--tint,${C.ink});color:${C.paper};border-left-color:var(--tint,${C.ink});}
+
+    /* panels */
+    .sp-main{display:grid;grid-template-columns:10fr 11fr;}
+    .sp-colR{border-left:1px solid ${C.edge};display:flex;flex-direction:column;}
+    .sp-cellhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:11px 14px 7px;
+      font-family:${COND};font-weight:700;font-size:11px;letter-spacing:.16em;}
+    .sp-hsub{font-family:${MONO};font-weight:400;font-size:9.5px;letter-spacing:0;color:${C.muted};}
+    .sp-schwrap{padding:2px 12px 16px;
+      background-image:linear-gradient(to right,rgba(21,32,30,.045) 1px,transparent 1px),
+                       linear-gradient(to bottom,rgba(21,32,30,.045) 1px,transparent 1px);
+      background-size:24px 24px;background-position:center top;}
+    .sp-schwrap svg{max-width:400px;margin:0 auto;}
+    .sp-curvewrap{padding:2px 12px 14px;}
+    .sp-curvewrap svg{max-width:560px;margin:0 auto;}
+    .sp-svg{display:block;width:100%;height:auto;}
+
+    /* readouts */
+    .sp-ros{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:${C.hair};border-top:1px solid ${C.edge};border-bottom:1px solid ${C.edge};}
+    .sp-ro{background:${C.paper};padding:11px 14px 12px;min-width:0;}
+    .sp-rolab{font-family:${COND};font-weight:700;font-size:10px;letter-spacing:.14em;color:${C.muted};}
+    .sp-roval{font-family:${MONO};font-weight:600;font-size:19px;margin-top:5px;white-space:nowrap;letter-spacing:-.02em;}
+    .sp-roval .u{font-size:11px;font-weight:400;color:${C.muted};margin-left:5px;letter-spacing:0;}
+    .sp-roval .fl{font-style:italic;font-weight:400;font-size:15px;color:${C.alert};}
+    .sp-roval .dz{color:${C.dead};}
+    .sp-rofoot{font-family:${SANS};font-size:10.5px;line-height:1.35;margin-top:5px;color:${C.alert};min-height:15px;}
+    .sp-rofoot.q{color:${C.muted};}
+
+    .sp-legend{display:flex;gap:18px;flex-wrap:wrap;padding:0 14px 8px;font-family:${COND};font-weight:600;font-size:10.5px;letter-spacing:.1em;color:${C.muted};}
+    .sp-legend span{display:inline-flex;align-items:center;transition:opacity 180ms linear;}
+    .sp-legend i{display:inline-block;width:15px;height:3px;margin-right:7px;}
+
+    /* range input */
+    input.sp-range{-webkit-appearance:none;appearance:none;width:100%;height:22px;margin:0;background:transparent;cursor:ew-resize;}
+    input.sp-range::-webkit-slider-runnable-track{height:3px;background:${C.edge};}
+    input.sp-range::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5.5px;background:${C.paper};border:2px solid ${C.ink};border-radius:0;}
+    input.sp-range::-moz-range-track{height:3px;background:${C.edge};}
+    input.sp-range::-moz-range-thumb{width:11px;height:11px;background:${C.paper};border:2px solid ${C.ink};border-radius:0;}
+    .sp-root :focus-visible{outline:2px solid ${C.div};outline-offset:2px;}
+
+    /* motion */
+    .sp-cur{transition:stroke-opacity 180ms linear, fill-opacity 180ms linear;}
+    .sp-fade{transition:opacity 180ms linear;}
+    .sp-wiper{transition:transform 200ms ease;}
+    @keyframes sp-march{to{stroke-dashoffset:-32;}}
+    .sp-march{stroke-dasharray:5 11;animation-name:sp-march;animation-timing-function:linear;animation-iteration-count:infinite;}
+
+    @media (max-width:820px){
+      .sp-root{padding:20px 10px 30px;}
       .sp-main{grid-template-columns:1fr;}
-      .sp-colR{border-left:0;border-top:1px solid #C9C9BE;}
-      .sp-tb{grid-template-columns:repeat(2,1fr);}
-      .sp-tb .sp-field:last-child{grid-column:span 2;}
-      .sp-notes{grid-template-columns:1fr;}
-      .sp-meta{grid-template-columns:repeat(2,1fr);}
-      .sp-meta .sp-mcell:last-child{grid-column:span 2;}
-      .sp-title{font-size:17px;}
+      .sp-colR{border-left:0;border-top:1px solid ${C.edge};}
+      .sp-tb{grid-template-columns:1fr;}
+      .sp-ros{grid-template-columns:1fr;}
+      .sp-title{font-size:21px;}
+      .sp-eq{width:100%;}
     }
     @media (prefers-reduced-motion:reduce){
       .sp-root *{transition:none !important;animation:none !important;}
     }
     `;
 
-    function Wire({ d, o }) {
+    /* ---- svg primitives ---------------------------------------------- */
+
+    // Paths are written in the direction the current travels, so the
+    // marching dashes read as flow rather than decoration.
+    function Wire({ d, i }) {
+      const o = flowOpacity(i);
+      const s = flowSpeed(i);
       return (
         <g>
-          <path d={d} stroke={C.wire} strokeWidth="2" fill="none" />
+          <path d={d} stroke={C.wire} strokeWidth="2" fill="none" strokeLinecap="square" />
           <path d={d} stroke={C.flow} strokeWidth="2" fill="none" className="sp-cur" style={{ strokeOpacity: o }} />
+          {o > 0 && (
+            <path
+              d={d} stroke={C.flow2} strokeWidth="2" fill="none" className="sp-march"
+              style={{ animationDuration: s.toFixed(2) + "s" }}
+            />
+          )}
         </g>
       );
     }
 
-    function CurrentArrow({ x, y, rot, o }) {
-      const scale = 0.4 + 0.8 * o;
+    function CurrentArrow({ x, y, rot, i }) {
+      const o = flowOpacity(i);
+      if (o <= 0) return null;
       return (
         <g transform={`translate(${x}, ${y}) rotate(${rot})`}>
-          <g
-            style={{
-              transform: `scale(${scale})`,
-              transformOrigin: "0 0",
-              opacity: o * 0.9,
-              transition: "transform 160ms ease, opacity 160ms linear"
-            }}
-          >
+          <g className="sp-fade" style={{ opacity: o }}>
             <line x1="-7" y1="0" x2="2" y2="0" stroke={C.flow} strokeWidth="2" strokeLinecap="round" />
-            <polygon points="1,-3.5 8,0 1,3.5" fill={C.flow} />
+            <polygon points="1,-3.6 8,0 1,3.6" fill={C.flow} />
           </g>
         </g>
       );
     }
 
-    function Body({ x, y, w, h, o }) {
+    function ILabel({ x, y, i, anchor = "start" }) {
+      const live = i > 0;
+      return (
+        <text
+          x={x} y={y} textAnchor={anchor} className="sp-fade"
+          fontFamily={MONO} fontSize="8.5" fontWeight={live ? 600 : 400}
+          fill={live ? C.ink : C.dead}
+        >{uA(i)} µA</text>
+      );
+    }
+
+    function Body({ x, y, w, h, i }) {
       if (h < 0.6) return null;
       return (
         <g>
-          <rect x={x} y={y} width={w} height={h} fill={C.body} stroke={C.comp} strokeWidth="1.4" />
-          <rect x={x + 1} y={y + 1} width={w - 2} height={Math.max(0, h - 2)} fill={C.flow} className="sp-cur" style={{ fillOpacity: o }} />
+          <rect x={x} y={y} width={w} height={h} fill={C.fill} stroke={C.ink} strokeWidth="1.4" />
+          <rect
+            x={x + 1} y={y + 1} width={w - 2} height={Math.max(0, h - 2)}
+            fill={C.flow} className="sp-cur" style={{ fillOpacity: flowOpacity(i) }}
+          />
         </g>
       );
     }
 
+    /* ---- controls ----------------------------------------------------- */
+
     function Seg({ label, value, options, onChange }) {
       return (
         <div className="sp-field">
-          <div className="sp-fieldhead">
-            <span className="sp-lab">{label}</span>
-          </div>
+          <div className="sp-fieldhead"><span className="sp-lab">{label}</span></div>
           <div className="sp-seg" role="group" aria-label={label}>
             {options.map((op) => (
               <button
                 key={String(op.v)}
                 type="button"
                 className={"sp-segbtn" + (value === op.v ? " on" : "")}
+                style={{ "--tint": op.tint || C.ink }}
                 aria-pressed={value === op.v}
                 onClick={() => onChange(op.v)}
-              >
-                {op.label}
-              </button>
+              >{op.label}</button>
             ))}
           </div>
         </div>
       );
     }
 
-    function SliderField({ id, label, valueText, min, max, step, value, onChange, ariaText }) {
+    function SliderField({ id, label, valueText, value, onChange, ariaText }) {
       return (
         <div className="sp-field">
           <div className="sp-fieldhead">
@@ -212,13 +267,8 @@
             <span className="sp-val">{valueText}</span>
           </div>
           <input
-            id={id}
-            className="sp-range"
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
+            id={id} className="sp-range" type="range"
+            min={0} max={100} step={1} value={value}
             aria-valuetext={ariaText}
             onChange={(e) => onChange(Number(e.target.value))}
           />
@@ -226,235 +276,334 @@
       );
     }
 
-    function Readout({ label, color, children }) {
+    function Readout({ label, children, foot, footQuiet }) {
       return (
         <div className="sp-ro">
           <div className="sp-rolab">{label}</div>
-          <div className="sp-roval" style={color ? { color } : undefined}>{children}</div>
+          <div className="sp-roval">{children}</div>
+          <div className={"sp-rofoot" + (footQuiet ? " q" : "")}>{foot || "\u00A0"}</div>
         </div>
       );
     }
 
-    function Schematic({ r, tied, lifted, rpot }) {
-      const yTap = 236 - 140 * r.f;
-      const oT = Math.min(1, r.i / IMAX);
-      const oU = Math.min(1, r.iUpper / IMAX);
-      const oC = Math.min(1, r.iContact / IMAX);
+    /* ---- schematic ----------------------------------------------------- */
+
+    const SCH = { SPINE: 100, BX: 88, BW: 24, TOP: 104, BOT: 248, TIE_Y: 92, NET_X: 214 };
+
+    function Schematic({ r, rheostat, lifted }) {
+      const { SPINE, BX, BW, TOP, BOT, TIE_Y, NET_X } = SCH;
+      const yTap = BOT - (BOT - TOP) * r.x;
+      const hU = yTap - TOP;
+      const hL = BOT - yTap;
+
+      const xTip = lifted ? 132 : 112;      // arrow tip; 112 is the track edge
+      const xBack = xTip + 10;
+      const midNet = (TIE_Y + yTap) / 2;
+
       const vTxt = r.vAIN0 == null ? "floating" : r.vAIN0.toFixed(3) + " V";
+      const label =
+        "Schematic. " +
+        (rheostat ? "Wiper pin 2 tied to pin 3. " : "Wiper pin 2 free, divider wiring. ") +
+        (lifted ? "Wiper contact lifted off the track. " : "Wiper contact on the track. ") +
+        `Loop current ${uA(r.i)} microamps, wiper ${uA(r.iWiper)}, upper segment ${uA(r.iUpper)}. ` +
+        `AIN0 ${r.vAIN0 == null ? "floating" : r.vAIN0.toFixed(3) + " volts"}.`;
+
       return (
-        <svg
-          className="sp-svg"
-          viewBox="0 0 300 290"
-          role="img"
-          aria-label="Schematic: 3.3 volt rail through R9 into the slide pot track, wiper to AIN0, with an optional tie wire from the wiper net back to pin 3. Amber shading shows current."
-        >
-          <Wire d="M100 22 V40" o={oT} />
-          <Wire d="M100 76 V84" o={oT} />
-          <Wire d="M100 84 V96" o={oU} />
-          <Wire d="M100 236 V252" o={oT} />
-          <Wire d={`M121 ${yTap} H196`} o={oC} />
-          <Wire d={`M196 84 V${yTap}`} o={oC} />
-          <Wire d="M196 84 H228.5" o={0} />
+        <svg className="sp-svg" viewBox="0 0 330 300" role="img" aria-label={label}>
+          {/* supply spine, drawn top down because that is how the current runs */}
+          <Wire d={`M${SPINE} 26 V44`} i={r.i} />
+          <Wire d={`M${SPINE} 82 V${TIE_Y}`} i={r.i} />
+          <Wire d={`M${SPINE} ${TIE_Y} V${TOP}`} i={r.iUpper} />
+          <Wire d={`M${SPINE} ${BOT} V266`} i={r.i} />
 
-          {tied && <Wire d="M100 84 H196" o={oC} />}
+          {/* wiper branch, drawn net to contact because that is the flow direction */}
+          <Wire d={`M${NET_X} ${TIE_Y} V${yTap}`} i={r.iWiper} />
+          <Wire d={`M${NET_X} ${yTap} H${xBack}`} i={r.iWiper} />
+          <Wire d={`M${NET_X} ${TIE_Y} H252`} i={0} />
 
-          <Body x={88} y={40} w={24} h={36} o={oT} />
-          <Body x={88} y={96} w={24} h={Math.max(0, yTap - 96)} o={oU} />
-          <Body x={88} y={yTap} w={24} h={236 - yTap} o={oT} />
+          {rheostat && <Wire d={`M${SPINE} ${TIE_Y} H${NET_X}`} i={r.iWiper} />}
 
-          <CurrentArrow x={118} y={31} rot={90} o={oT} />
-          <CurrentArrow x={118} y={80} rot={90} o={oT} />
-          <CurrentArrow x={118} y={(96 + yTap) / 2} rot={90} o={oU} />
-          <CurrentArrow x={118} y={(yTap + 236) / 2} rot={90} o={oT} />
-          <CurrentArrow x={118} y={244} rot={90} o={oT} />
+          <Body x={BX} y={44} w={BW} h={38} i={r.i} />
+          <Body x={BX} y={TOP} w={BW} h={Math.max(0, hU)} i={r.iUpper} />
+          <Body x={BX} y={yTap} w={BW} h={Math.max(0, hL)} i={r.i} />
 
-          {tied && <CurrentArrow x={148} y={72} rot={0} o={oC} />}
-          <CurrentArrow x={208} y={(84 + yTap) / 2} rot={90} o={oC} />
-          <CurrentArrow x={158.5} y={yTap - 12} rot={180} o={oC} />
+          {/* rail and ground */}
+          <line x1="90" y1="26" x2="110" y2="26" stroke={C.ink} strokeWidth="1.8" />
+          <line x1="90" y1="266" x2="110" y2="266" stroke={C.ink} strokeWidth="1.8" />
+          <line x1="94" y1="271" x2="106" y2="271" stroke={C.ink} strokeWidth="1.5" />
+          <line x1="98" y1="276" x2="102" y2="276" stroke={C.ink} strokeWidth="1.2" />
 
-          <line x1="91" y1="22" x2="109" y2="22" stroke={C.ink} strokeWidth="1.6" />
-          <line x1="90" y1="252" x2="110" y2="252" stroke={C.ink} strokeWidth="1.6" />
-          <line x1="94" y1="257" x2="106" y2="257" stroke={C.ink} strokeWidth="1.4" />
-          <line x1="98" y1="262" x2="102" y2="262" stroke={C.ink} strokeWidth="1.2" />
-
-          <g className="sp-wiper" style={{ transform: lifted ? "translate(6px,0)" : "translate(0,0)" }}>
-            <polygon points={`112,${yTap} 121,${yTap - 5.5} 121,${yTap + 5.5}`} fill={C.ink} />
+          {/* wiper contact: the air gap is the state */}
+          <g className="sp-wiper" style={{ transform: `translate(${xTip - 112}px, 0)` }}>
+            <polygon points={`112,${yTap} 122,${yTap - 5.5} 122,${yTap + 5.5}`} fill={C.ink} />
           </g>
+          {!lifted && <circle cx="112" cy={yTap} r="2.5" fill={C.ink} />}
+          {lifted && (
+            <text
+              x={(112 + xTip) / 2 + 4} y={yTap > 216 ? yTap - 11 : yTap + 16}
+              textAnchor="middle" fontFamily={MONO} fontSize="8" fontStyle="italic" fill={C.alert}
+            >open</text>
+          )}
 
-          {!lifted && <circle cx="112" cy={yTap} r="2.4" fill={C.ink} />}
-          {tied && <circle cx="100" cy="84" r="2.4" fill={C.ink} />}
-          {tied && <circle cx="196" cy="84" r="2.4" fill={C.ink} />}
-          <circle cx="232" cy="84" r="3.2" fill={C.paper} stroke={C.ink} strokeWidth="1.4" />
+          {rheostat && <circle cx={SPINE} cy={TIE_Y} r="2.5" fill={C.ink} />}
+          {rheostat && <circle cx={NET_X} cy={TIE_Y} r="2.5" fill={C.ink} />}
+          <circle cx="256" cy={TIE_Y} r="3.4" fill={C.paper} stroke={C.ink} strokeWidth="1.5" />
 
-          <text x="100" y="14" textAnchor="middle" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.net}>+3.3V</text>
+          <CurrentArrow x={120} y={63} rot={90} i={r.i} />
+          {hU >= 24 && <CurrentArrow x={120} y={TOP + hU / 2} rot={90} i={r.iUpper} />}
+          {hL >= 24 && <CurrentArrow x={120} y={yTap + hL / 2} rot={90} i={r.i} />}
+          <CurrentArrow x={120} y={258} rot={90} i={r.i} />
+          {rheostat && <CurrentArrow x={168} y={TIE_Y} rot={0} i={r.iWiper} />}
+          {yTap - TIE_Y >= 26 && <CurrentArrow x={NET_X} y={midNet} rot={90} i={r.iWiper} />}
+          <CurrentArrow x={172} y={yTap} rot={180} i={r.iWiper} />
 
-          <text x="82" y="53" textAnchor="end" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.des}>R9</text>
-          <text x="82" y="65" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>10k</text>
+          <ILabel x={130} y={66} i={r.i} />
+          {hU >= 20 && <ILabel x={130} y={TOP + hU / 2 + 3} i={r.iUpper} />}
+          {hL >= 20 && <ILabel x={130} y={yTap + hL / 2 + 3} i={r.iLower} />}
+          <ILabel x={180} y={yTap - 8} i={r.iWiper} anchor="middle" />
 
-          <text x="82" y="158" textAnchor="end" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.des}>R1</text>
-          <text x="82" y="170" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>{(rpot / 1000).toFixed(1)}k</text>
+          {/* designators stay ink; colour is reserved for current and mode */}
+          <text x="82" y="57" textAnchor="end" fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>R9</text>
+          <text x="82" y="69" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>10k</text>
+          <text x="82" y="170" textAnchor="end" fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>R1</text>
+          <text x="82" y="182" textAnchor="end" fontFamily={MONO} fontSize="9" fill={C.muted}>10k</text>
+          <text x="82" y={TOP + 3} textAnchor="end" fontFamily={MONO} fontSize="8" fill={C.muted}>3</text>
+          <text x="82" y={BOT - 2} textAnchor="end" fontFamily={MONO} fontSize="8" fill={C.muted}>1</text>
+          <text x={xBack + 4} y={yTap + 14} fontFamily={MONO} fontSize="8" fill={C.muted}>2</text>
 
-          <text x="80" y="103" textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>3</text>
-          <text x="80" y="234" textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>1</text>
-          <text x="127" y={yTap + 15} fontFamily={MONO} fontSize="7.5" fill={C.muted}>2</text>
-
-          {tied && <text x="148" y="93" textAnchor="middle" fontFamily={MONO} fontSize="9" fontStyle="italic" fill={C.ann}>tie</text>}
-
-          <text x="238" y="80" fontFamily={MONO} fontSize="10" fontWeight="600" fill={C.net}>AIN0</text>
-          <text x="238" y="95" fontFamily={MONO} fontSize="9" fontWeight="600" fontStyle={r.vAIN0 == null ? "italic" : "normal"} fill={r.vAIN0 == null ? C.ann : C.ink}>{vTxt}</text>
+          <text x={SPINE} y="16" textAnchor="middle" fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>+3.3V</text>
+          {rheostat && (
+            <text x="132" y="86" fontFamily={MONO} fontSize="8" fontStyle="italic" fill={C.rhe}>tie 2→3</text>
+          )}
+          <text x="262" y={TIE_Y - 4} fontFamily={MONO} fontSize="10.5" fontWeight="600" fill={C.ink}>AIN0</text>
+          <text
+            x="262" y={TIE_Y + 11} fontFamily={MONO} fontSize="9.5" fontWeight="600"
+            fontStyle={r.vAIN0 == null ? "italic" : "normal"}
+            fill={r.vAIN0 == null ? C.alert : C.ink}
+          >{vTxt}</text>
         </svg>
       );
     }
 
-    const CH = { W: 300, H: 192, ML: 32, MR: 10, MT: 10, MB: 26, VMAX: 1.85 };
+    /* ---- transfer curve ------------------------------------------------ */
+
+    const CH = { W: 320, H: 208, ML: 30, MR: 12, MT: 22, MB: 28, VMAX: VCC };
     const chX = (x) => CH.ML + x * (CH.W - CH.ML - CH.MR);
     const chY = (v) => CH.MT + (1 - v / CH.VMAX) * (CH.H - CH.MT - CH.MB);
+    const TICKS = Array.from({ length: 11 }, (_, k) => k / 10);
 
-    function Curve({ taper, rpot, travel, vNow, tied }) {
+    function Curve({ travel, vNow, rheostat, lifted }) {
       const { W, H, ML, MR, MT, MB } = CH;
+      const x0 = ML, x1 = W - MR, y0 = MT, y1 = H - MB;
+
       const paths = useMemo(() => {
-        let u = "", t = "";
+        let d = "", t = "";
         for (let j = 0; j <= 100; j++) {
-          const f = taperF(j / 100, taper);
-          const px = chX(j / 100).toFixed(1);
-          u += (j ? " L " : "M ") + px + " " + chY(vDivider(f, rpot)).toFixed(1);
-          t += (j ? " L " : "M ") + px + " " + chY(vTied(f, rpot)).toFixed(1);
+          const x = j / 100;
+          const px = chX(x).toFixed(1);
+          d += (j ? " L " : "M ") + px + " " + chY(vDivider(x)).toFixed(1);
+          t += (j ? " L " : "M ") + px + " " + chY(vRheostat(x)).toFixed(1);
         }
-        return { u, t };
-      }, [taper, rpot]);
+        return { d, t };
+      }, []);
+
+      const activeColor = rheostat ? C.rhe : C.div;
+      const activeV = rheostat ? vRheostat : vDivider;
+      const noReading = lifted && !rheostat;
+
       return (
         <svg
-          className="sp-svg"
-          viewBox={`0 0 ${W} ${H}`}
-          role="img"
-          aria-label="Transfer curve: AIN0 voltage against travel for both wirings, with the live operating point marked."
+          className="sp-svg" viewBox={`0 0 ${W} ${H}`} role="img"
+          aria-label={
+            `Transfer curve, AIN0 volts against travel. ${rheostat ? "Rheostat" : "Divider"} wiring active. ` +
+            (noReading ? "No valid reading: the wiper is lifted and AIN0 floats."
+              : lifted ? "Wiper lifted: AIN0 held at 1.65 volts at every travel position."
+              : `Operating point ${vNow.toFixed(3)} volts at ${travel} percent travel.`)
+          }
         >
-          {[0.5, 1, 1.5].map((v) => (
-            <line key={v} x1={ML} x2={W - MR} y1={chY(v)} y2={chY(v)} stroke={C.rule} strokeWidth="1" />
+          <defs>
+            <pattern id="sp-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="7" stroke={C.alert} strokeWidth="1" strokeOpacity="0.22" />
+            </pattern>
+          </defs>
+
+          {/* R9 caps AIN0 at half the reference, so the top half is dead space */}
+          <rect x={x0} y={chY(VCC)} width={x1 - x0} height={chY(V_FS) - chY(VCC)} fill={C.ink} fillOpacity="0.035" />
+
+          {[0.5, 1, 1.5, 2, 2.5, 3].map((v) => (
+            <line key={v} x1={x0} x2={x1} y1={chY(v)} y2={chY(v)} stroke={C.hair} strokeWidth="1" />
           ))}
           {[0.25, 0.5, 0.75].map((x) => (
-            <line key={x} x1={chX(x)} x2={chX(x)} y1={MT} y2={H - MB} stroke={C.rule} strokeWidth="1" />
+            <line key={x} x1={chX(x)} x2={chX(x)} y1={y0} y2={y1} stroke={C.hair} strokeWidth="1" />
           ))}
-          <path d={`M ${ML} ${MT} L ${ML} ${H - MB} L ${W - MR} ${H - MB}`} fill="none" stroke={C.ink} strokeWidth="1.2" />
-          {[0, 0.5, 1, 1.5].map((v) => (
-            <text key={v} x={ML - 5} y={chY(v) + 3} textAnchor="end" fontFamily={MONO} fontSize="8" fill={C.muted}>{v ? v.toFixed(1) : "0"}</text>
+
+
+          <line x1={x0} x2={x1} y1={chY(V_FS)} y2={chY(V_FS)} stroke={C.edge} strokeWidth="1" strokeDasharray="4 3" />
+          {!(lifted && rheostat) && (
+            <text x={x0 + 4} y={chY(V_FS) - 5} fontFamily={MONO} fontSize="8.5" fill={C.muted}>(AIN0 Max)</text>
+          )}
+
+          <line x1={x0} x2={x1} y1={y0} y2={y0} stroke={C.ink} strokeWidth="1" strokeDasharray="2 2" />
+          <text x={x1} y={y0 - 7} textAnchor="end" fontFamily={MONO} fontSize="8.5" fill={C.muted}>VREF 3.3 V</text>
+
+          <path d={`M ${x0} ${y0} L ${x0} ${y1} L ${x1} ${y1}`} fill="none" stroke={C.ink} strokeWidth="1.2" />
+          {[0, 1, 2, 3].map((v) => (
+            <text key={v} x={x0 - 6} y={chY(v) + 3} textAnchor="end" fontFamily={MONO} fontSize="8.5" fill={C.muted}>{v}</text>
           ))}
-          <text x={ML - 5} y={MT + 1} textAnchor="end" fontFamily={MONO} fontSize="7.5" fill={C.muted}>V</text>
+          <text x={x0 - 6} y={y0 - 7} textAnchor="end" fontFamily={MONO} fontSize="8" fill={C.muted}>V</text>
           {[0, 25, 50, 75, 100].map((p) => (
-            <text key={p} x={chX(p / 100)} y={H - MB + 13} textAnchor="middle" fontFamily={MONO} fontSize="8" fill={C.muted}>{p}</text>
+            <text key={p} x={chX(p / 100)} y={y1 + 14} textAnchor="middle" fontFamily={MONO} fontSize="8.5" fill={C.muted}>{p}</text>
           ))}
-          <text x={(ML + W - MR) / 2} y={H - 3} textAnchor="middle" fontFamily={NARROW} fontSize="7.5" letterSpacing="0.12em" fill={C.muted}>TRAVEL %</text>
-          <path d={paths.u} fill="none" stroke={C.des} strokeWidth="1.8" style={{ opacity: tied ? 0.2 : 1, transition: "opacity 160ms linear" }} />
-          <path d={paths.t} fill="none" stroke={C.comp} strokeWidth="1.8" style={{ opacity: tied ? 1 : 0.2, transition: "opacity 160ms linear" }} />
+          <text x={(x0 + x1) / 2} y={H - 3} textAnchor="middle" fontFamily={COND} fontWeight="600" fontSize="8.5" letterSpacing="0.16em" fill={C.muted}>TRAVEL %</text>
+
+          <path className="sp-fade" d={paths.d} fill="none" stroke={C.div} strokeWidth={rheostat ? 1.4 : 2} style={{ opacity: rheostat ? 0.28 : 1 }} />
+          <path className="sp-fade" d={paths.t} fill="none" stroke={C.rhe} strokeWidth={rheostat ? 2 : 1.4} style={{ opacity: rheostat ? 1 : 0.28 }} />
+
+          {/* equal travel steps: the spacing is the resolution story */}
+          {!lifted && TICKS.map((x) => (
+            <circle key={x} cx={chX(x)} cy={chY(activeV(x))} r="1.9" fill={activeColor} stroke={C.paper} strokeWidth="0.8" />
+          ))}
+
+          {lifted && rheostat && (
+            <g>
+              <line x1={x0} x2={x1} y1={chY(V_FS)} y2={chY(V_FS)} stroke={C.alert} strokeWidth="2" strokeDasharray="5 3" />
+              <text x={x0 + 5} y={chY(V_FS) - 6} fontFamily={MONO} fontSize="8.5" fontWeight="600" fill={C.alert}>LIFTED · 1.65 V at every position</text>
+            </g>
+          )}
+
+          {noReading && (
+            <g>
+              <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="url(#sp-hatch)" />
+              <rect x={(x0 + x1) / 2 - 86} y={chY(V_FS) + 18} width="172" height="27" fill={C.paper} stroke={C.alert} strokeWidth="1" />
+              <text x={(x0 + x1) / 2} y={chY(V_FS) + 35} textAnchor="middle" fontFamily={MONO} fontSize="9.5" fontWeight="600" fill={C.alert}>AIN0 FLOATING · NO READING</text>
+            </g>
+          )}
+
           {vNow != null && (
             <g>
-              <line x1={chX(travel / 100)} y1={chY(vNow)} x2={chX(travel / 100)} y2={chY(0)} stroke={C.muted} strokeWidth="1" strokeDasharray="3 3" />
-              <circle cx={chX(travel / 100)} cy={chY(vNow)} r="3.4" fill={C.ann} stroke={C.paper} strokeWidth="1.3" />
+              <line x1={chX(travel / 100)} y1={chY(vNow)} x2={chX(travel / 100)} y2={y1} stroke={C.muted} strokeWidth="1" strokeDasharray="3 3" />
+              <circle cx={chX(travel / 100)} cy={chY(vNow)} r="4" fill={C.alert} stroke={C.paper} strokeWidth="1.6" />
             </g>
           )}
         </svg>
       );
     }
 
+    /* ---- sheet --------------------------------------------------------- */
+
     function SlidePotAdcSheet() {
       const [travel, setTravel] = useState(50);
-      const [tied, setTied] = useState(false);
-      const [taper, setTaper] = useState("linear");
-      const [rpot, setRpot] = useState(10000);
+      const [rheostat, setRheostat] = useState(false);
       const [lifted, setLifted] = useState(false);
 
-      const r = useMemo(
-        () => solve({ x: travel / 100, tied, taper, rpot, lifted }),
-        [travel, tied, taper, rpot, lifted]
-      );
-      const err = r.vAIN0 == null ? null : ((e) => (Math.abs(e) < 5e-7 ? 0 : e))((r.vAIN0 - r.vIdeal) * 1000);
+      const x = travel / 100;
+      const r = useMemo(() => solve({ x, rheostat, lifted }), [x, rheostat, lifted]);
+
+      const atFullScale = r.vAIN0 != null && Math.abs(r.vAIN0 - V_FS) < 5e-4;
+      const vFoot =
+        r.vAIN0 == null ? "nothing is driving the pin"
+        : rheostat && lifted ? "stuck here wherever you drag"
+        : rheostat && atFullScale ? "same as a lifted wiper"
+        : null;
+
+      const wiperFoot = !rheostat ? "never carries current here"
+        : lifted ? "open, so the track takes over"
+        : "carrying the whole loop";
 
       return (
         <div className="sp-root">
           <style>{CSS}</style>
           <div className="sp-sheet">
             <div className="sp-in">
+
               <header className="sp-head">
                 <div>
-                  <div className="sp-title">SLIDE POT → ADC INPUT</div>
-                  <div className="sp-subtitle">Bourns PTB0143 · R9 10 kΩ to +3.3 V · pin 1 GND · wiper pin 2 → AIN0 (hi-Z)</div>
+                  <div className="sp-title">SLIDE POT <span className="dim">→ ADC INPUT</span></div>
+                  
+                  <span className="sp-subtitle">
+                    <a href="https://github.com/hmatt1/pcb-100mm-slider-i2c">Read the blog post</a>
+                  </span>
                 </div>
-                <div className="sp-badge">DIVIDER VS WIPER TIED TO PIN 3</div>
+                <div className="sp-eq">
+                  <div className={"sp-eqrow" + (rheostat ? "" : " on")} style={{ "--k": C.div }}>
+                    <span className="sp-eqk">DIVIDER</span>
+                    <span className="sp-eqv">V = 1.65 · x</span>
+                  </div>
+                  <div className={"sp-eqrow" + (rheostat ? " on" : "")} style={{ "--k": C.rhe }}>
+                    <span className="sp-eqk">RHEOSTAT</span>
+                    <span className="sp-eqv">V = 3.3 · x / (1 + x)</span>
+                  </div>
+                </div>
               </header>
+
+              <div className="sp-tb">
+                <SliderField
+                  id="sp-travel"
+                  label="WIPER POSITION"
+                  valueText={travel + " %"}
+                  value={travel}
+                  onChange={setTravel}
+                  ariaText={
+                    travel + " percent, " +
+                    (r.vAIN0 == null ? "AIN0 floating, no reading" : "AIN0 " + r.vAIN0.toFixed(3) + " volts")
+                  }
+                />
+                <Seg
+                  label="MODE" value={rheostat} onChange={setRheostat}
+                  options={[
+                    { v: false, label: "DIVIDER", tint: C.div },
+                    { v: true, label: "RHEOSTAT", tint: C.rhe },
+                  ]}
+                />
+                <Seg
+                  label="WIPER" value={lifted} onChange={setLifted}
+                  options={[
+                    { v: false, label: "ON TRACK", tint: C.ink },
+                    { v: true, label: "LIFTED", tint: C.alert },
+                  ]}
+                />
+              </div>
 
               <div className="sp-main">
                 <section>
                   <div className="sp-cellhead">
                     <span>SCHEMATIC</span>
-                    <span className="sp-hsub">{(tied ? "mode: tied" : "mode: divider") + (lifted ? " · contact lifted" : "")}</span>
+                    <span className="sp-hsub">{(rheostat ? "pin 2 tied to pin 3" : "pin 2 free") + " · " + (lifted ? "contact open" : "contact closed")}</span>
                   </div>
                   <div className="sp-schwrap">
-                    <Schematic r={r} tied={tied} lifted={lifted} rpot={rpot} />
+                    <Schematic r={r} rheostat={rheostat} lifted={lifted} />
                   </div>
                 </section>
 
                 <section className="sp-colR">
-                  <div className="sp-cellhead">
-                    <span>OPERATING POINT</span>
-                    <span className="sp-hsub">dc steady state</span>
-                  </div>
                   <div className="sp-ros">
-                    <Readout label="V (AIN0)">
-                      {r.vAIN0 == null ? <span className="fl">floating</span> : <>{r.vAIN0.toFixed(3)}<span className="u">V</span></>}
+                    <Readout label="V (AIN0)" foot={vFoot} footQuiet={r.vAIN0 == null}>
+                      {r.vAIN0 == null
+                        ? <span className="fl">floating</span>
+                        : <>{r.vAIN0.toFixed(3)}<span className="u">V</span></>}
                     </Readout>
-                    <Readout
-                      label="DEVIATION FROM IDEAL"
-                      color={err == null ? C.muted : Math.abs(err) < 0.05 ? C.des : C.comp}
-                    >
-                      {err == null ? "n/a" : <>{err.toFixed(1)}<span className="u">mV</span></>}
+                    <Readout label="I · WIPER CONTACT" foot={wiperFoot} footQuiet>
+                      <span className={r.iWiper > 0 ? "" : "dz"}>{uA(r.iWiper)}</span><span className="u">µA</span>
                     </Readout>
-                    <Readout label="I · WIPER CONTACT">{(r.iContact * 1e6).toFixed(1)}<span className="u">µA</span></Readout>
-                    <Readout label="I · UPPER SEGMENT">{(r.iUpper * 1e6).toFixed(1)}<span className="u">µA</span></Readout>
+                    <Readout label="I · UPPER SEGMENT" footQuiet>
+                      <span className={r.iUpper > 0 ? "" : "dz"}>{uA(r.iUpper)}</span><span className="u">µA</span>
+                    </Readout>
                   </div>
+
                   <div className="sp-cellhead">
                     <span>TRANSFER CURVE</span>
-                    <span className="sp-hsub">V(AIN0) vs travel</span>
+                    <span className="sp-hsub">ticks at equal travel steps</span>
                   </div>
                   <div className="sp-legend">
-                    <span style={{ opacity: tied ? 0.4 : 1, transition: "opacity 160ms linear" }}><i style={{ borderTopColor: C.des }} />VOLTAGE DIVIDER</span>
-                    <span style={{ opacity: tied ? 1 : 0.4, transition: "opacity 160ms linear" }}><i style={{ borderTopColor: C.comp }} />WIPER TIED TO PIN 3</span>
+                    <span className="sp-fade" style={{ opacity: rheostat ? 0.4 : 1 }}><i style={{ background: C.div }} />DIVIDER</span>
+                    <span className="sp-fade" style={{ opacity: rheostat ? 1 : 0.4 }}><i style={{ background: C.rhe }} />RHEOSTAT</span>
                   </div>
                   <div className="sp-curvewrap">
-                    <Curve taper={taper} rpot={rpot} travel={travel} vNow={r.vAIN0} tied={tied} />
+                    <Curve travel={travel} vNow={r.vAIN0} rheostat={rheostat} lifted={lifted} />
                   </div>
                 </section>
               </div>
 
-              <div className="sp-notes">
-                <div className="sp-notecell">
-                  <div className="sp-notehead">NOTES</div>
-                  <div className="sp-note"><b>1.</b><span>Steady state DC. C5 in the original schematic is an open at DC and is left off the sheet.</span></div>
-                  <div className="sp-note"><b>2.</b><span>Residual resistance (500 Ω or 1% max per the datasheet) is not modelled, so both curves reach exactly 0 V at zero travel where a real part will not.</span></div>
-                  <div className="sp-note"><b>3.</b><span>The audio taper is approximated as an exponential through 15% at mid travel. Real A tapers are piecewise-linear segments, so treat that curve as the shape rather than the spec.</span></div>
-                </div>
-                <div className="sp-notecell">
-                  <div className="sp-notehead">TRY THIS</div>
-                  <div className="sp-note"><b>▸</b><span>Select TIED TO PIN 3 and sweep travel 0 → 100%. The loop current falls from 330 µA to 165 µA (R1 at 10 k), all of it through the wiper contact.</span></div>
-                  <div className="sp-note"><b>▸</b><span>The tied transfer curve bows above the divider line, so the deviation readout runs positive everywhere except the endpoints.</span></div>
-                  <div className="sp-note"><b>▸</b><span>Toggle WIPER CONTACT to LIFTED in each mode. The divider leaves AIN0 floating, while the tie snaps it to the pin 3 voltage and the marker jumps off the curve.</span></div>
-                </div>
-              </div>
-
-              <div className="sp-tb">
-                <SliderField id="sp-travel" label="TRAVEL" valueText={travel + " %"} min={0} max={100} step={1} value={travel} onChange={setTravel} ariaText={travel + " percent"} />
-                <Seg label="WIPER (PIN 2)" value={tied} onChange={setTied} options={[{ v: false, label: "DIVIDER" }, { v: true, label: "TIED TO PIN 3" }]} />
-                <Seg label="TAPER" value={taper} onChange={setTaper} options={[{ v: "linear", label: "B · LINEAR" }, { v: "audio", label: "A · AUDIO" }]} />
-                <SliderField id="sp-rpot" label="TRACK R1 · ±20 %" valueText={(rpot / 1000).toFixed(1) + " kΩ"} min={8000} max={12000} step={100} value={rpot} onChange={setRpot} ariaText={(rpot / 1000).toFixed(1) + " kilohms"} />
-                <Seg label="WIPER CONTACT" value={lifted} onChange={setLifted} options={[{ v: false, label: "ON TRACK" }, { v: true, label: "LIFTED" }]} />
-              </div>
-
-              <div className="sp-meta">
-                <div className="sp-mcell"><span className="sp-mlab">TITLE</span><span className="sp-mval">WIPER WIRING STUDY</span></div>
-                <div className="sp-mcell"><span className="sp-mlab">DWG NO</span><span className="sp-mval">SP-ADC-01</span></div>
-                <div className="sp-mcell"><span className="sp-mlab">REV</span><span className="sp-mval">C</span></div>
-                <div className="sp-mcell"><span className="sp-mlab">SCALE</span><span className="sp-mval">NTS</span></div>
-                <div className="sp-mcell"><span className="sp-mlab">SHEET</span><span className="sp-mval">1 / 1</span></div>
-              </div>
             </div>
           </div>
         </div>
