@@ -102,9 +102,9 @@
         camera.near = maxDim / 100;
         camera.far = maxDim * 100;
         
-        // Move camera back enough to see the whole model
-        // A multiplier of 1.5 - 2 usually frames it well
-        camera.position.set(0, maxDim, maxDim * 1.5);
+        // Move camera directly above the board for a top-down view.
+        // We add a tiny amount to Z (0.01) to prevent Gimbal lock with OrbitControls
+        camera.position.set(0, maxDim * 1.2, 0.01);
         camera.updateProjectionMatrix();
         
         // Adjust light shadows to cover the model
