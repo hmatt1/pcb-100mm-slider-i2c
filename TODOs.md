@@ -23,7 +23,7 @@
   configure the address.
   [x] The "Action" Shot: A photo of the board wired up and plugged into your computer/microcontroller setup to
   introduce the Python software section.
-  [ ] Python Output Screenshot: A screenshot of your terminal/console showing the live data streaming in from the
+  [x] Python Output Screenshot: A screenshot of your terminal/console showing the live data streaming in from the
   slider.
 
   ### Sharing
