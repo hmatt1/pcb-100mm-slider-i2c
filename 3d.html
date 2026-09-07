@@ -103,7 +103,8 @@
         camera.far = maxDim * 100;
         
         // The top face of the board is on the +Y side
-        camera.position.set(0, maxDim * 1.2, 0.01);
+        camera.up.set(0, 0, -1); // Change the "up" direction to avoid gimbal lock
+        camera.position.set(0, maxDim * 1.2, 0); // Perfectly 0 on the Z axis
         camera.updateProjectionMatrix();
         
         // Adjust light shadows to cover the model
