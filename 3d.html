@@ -86,10 +86,25 @@
         model.position.y -= center.y;
         model.position.z -= center.z;
         
+        const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+        
         model.traverse((node) => {
           if (node.isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
+            
+            if (node.material) {
+              // 1. Prevent textures (like silkscreen) from blurring or fading out at glancing angles
+              if (node.material.map) {
+                node.material.map.anisotropy = maxAnisotropy;
+              }
+              // 2. Fix Z-sorting and transparency culling for silkscreen layers
+              if (node.material.transparent) {
+                node.material.alphaTest = 0.5;
+              }
+              // 3. Ensure double-sided rendering so thin flat meshes don't disappear from behind
+              node.material.side = THREE.DoubleSide;
+            }
           }
         });
         
