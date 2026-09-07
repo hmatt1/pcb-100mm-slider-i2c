@@ -37,45 +37,33 @@
 
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    // Match the background color
     scene.background = new THREE.Color('#C2CBC7');
 
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    // Position the camera to fit a typical 100mm KiCad board export
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
+    // Initial position, will be updated when model loads
     camera.position.set(0, 100, 150);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    // Set correct output color space for glTF
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    // Don't let users pan completely off the board
-    controls.maxDistance = 500;
 
-    // Ambient light for general illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    // Directional light representing a sun/lamp for shadows and highlights
     const dirLight = new THREE.DirectionalLight(0xffffff, 2);
     dirLight.position.set(50, 100, 50);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
-    // Increase shadow camera bounds for a 100mm object
-    dirLight.shadow.camera.left = -100;
-    dirLight.shadow.camera.right = 100;
-    dirLight.shadow.camera.top = 100;
-    dirLight.shadow.camera.bottom = -100;
     scene.add(dirLight);
 
-    // A secondary backlight to fill in dark spots
     const backLight = new THREE.DirectionalLight(0xffffff, 0.8);
     backLight.position.set(-50, -50, -50);
     scene.add(backLight);
@@ -88,14 +76,16 @@
         
         const model = gltf.scene;
         
-        // Center the model in the scene automatically
+        // Compute bounding box
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
-        model.position.x += (model.position.x - center.x);
-        model.position.y += (model.position.y - center.y);
-        model.position.z += (model.position.z - center.z);
+        const size = box.getSize(new THREE.Vector3());
         
-        // Enable shadows for all meshes
+        // Center the model at 0,0,0
+        model.position.x -= center.x;
+        model.position.y -= center.y;
+        model.position.z -= center.z;
+        
         model.traverse((node) => {
           if (node.isMesh) {
             node.castShadow = true;
@@ -105,13 +95,33 @@
         
         scene.add(model);
         
+        // Auto-frame the camera
+        const maxDim = Math.max(size.x, size.y, size.z) || 100;
+        
+        // Adjust camera planes so we don't clip the model
+        camera.near = maxDim / 100;
+        camera.far = maxDim * 100;
+        
+        // Move camera back enough to see the whole model
+        // A multiplier of 1.5 - 2 usually frames it well
+        camera.position.set(0, maxDim, maxDim * 1.5);
+        camera.updateProjectionMatrix();
+        
+        // Adjust light shadows to cover the model
+        dirLight.shadow.camera.left = -maxDim;
+        dirLight.shadow.camera.right = maxDim;
+        dirLight.shadow.camera.top = maxDim;
+        dirLight.shadow.camera.bottom = -maxDim;
+        dirLight.shadow.camera.updateProjectionMatrix();
+
         controls.target.set(0, 0, 0);
+        controls.maxDistance = maxDim * 10;
         controls.update();
       },
       function (xhr) {
         if(xhr.lengthComputable) {
            const percentComplete = xhr.loaded / xhr.total * 100;
-           document.getElementById('loading').innerText = 'Loading 3D Model: ' + Math.round(percentComplete, 2) + '%';
+           document.getElementById('loading').innerText = 'Loading 3D Model: ' + Math.round(percentComplete) + '%';
         }
       },
       function (error) {
