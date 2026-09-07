@@ -102,8 +102,8 @@
         camera.near = maxDim / 100;
         camera.far = maxDim * 100;
         
-        // If the bottom face is +Y, the top face (with the slider) is -Y.
-        camera.position.set(0, -maxDim * 1.2, 0.01);
+        // The top face of the board is on the +Y side
+        camera.position.set(0, maxDim * 1.2, 0.01);
         camera.updateProjectionMatrix();
         
         // Adjust light shadows to cover the model

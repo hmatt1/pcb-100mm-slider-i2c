@@ -31,3 +31,4 @@
   [ ]  Hackaday post
   [ ]  Reddit post
   [ ]  PCBWay review
+  [ ]  OSHWA Certification
