@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D PCB Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; background: #C2CBC7; display: flex; flex-direction: column; height: 100vh; font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; }
+    header { background: #FBFCFA; padding: 15px 20px; border-bottom: 1px solid #B4BDB8; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+    header a { color: #15201E; text-decoration: none; font-weight: 600; font-size: 14px; }
+    header a:hover { text-decoration: underline; }
+    #canvas-container { flex: 1; width: 100%; height: 100%; display: block; }
+    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: 600; color: #3A4744; font-family: monospace; }
+  </style>
+  <!-- Using importmap to resolve Three.js and addons -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header>
+    <strong>Interactive 3D PCB Viewer</strong>
+    <a href="index.html">← Back to Main Demo</a>
+  </header>
+  <div id="loading">Loading 3D Model...</div>
+  <div id="canvas-container"></div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    // Match the background color
+    scene.background = new THREE.Color('#C2CBC7');
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    // Position the camera to fit a typical 100mm KiCad board export
+    camera.position.set(0, 100, 150);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Set correct output color space for glTF
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    // Don't let users pan completely off the board
+    controls.maxDistance = 500;
+
+    // Ambient light for general illumination
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    scene.add(ambientLight);
+
+    // Directional light representing a sun/lamp for shadows and highlights
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+    dirLight.position.set(50, 100, 50);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    // Increase shadow camera bounds for a 100mm object
+    dirLight.shadow.camera.left = -100;
+    dirLight.shadow.camera.right = 100;
+    dirLight.shadow.camera.top = 100;
+    dirLight.shadow.camera.bottom = -100;
+    scene.add(dirLight);
+
+    // A secondary backlight to fill in dark spots
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    backLight.position.set(-50, -50, -50);
+    scene.add(backLight);
+
+    const loader = new GLTFLoader();
+    loader.load(
+      'assets/slider1.glb',
+      function (gltf) {
+        document.getElementById('loading').style.display = 'none';
+        
+        const model = gltf.scene;
+        
+        // Center the model in the scene automatically
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.x += (model.position.x - center.x);
+        model.position.y += (model.position.y - center.y);
+        model.position.z += (model.position.z - center.z);
+        
+        // Enable shadows for all meshes
+        model.traverse((node) => {
+          if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+          }
+        });
+        
+        scene.add(model);
+        
+        controls.target.set(0, 0, 0);
+        controls.update();
+      },
+      function (xhr) {
+        if(xhr.lengthComputable) {
+           const percentComplete = xhr.loaded / xhr.total * 100;
+           document.getElementById('loading').innerText = 'Loading 3D Model: ' + Math.round(percentComplete, 2) + '%';
+        }
+      },
+      function (error) {
+        console.error('An error happened loading the GLB file:', error);
+        document.getElementById('loading').innerText = 'Error loading 3D model.';
+      }
+    );
+
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
