@@ -102,9 +102,8 @@
         camera.near = maxDim / 100;
         camera.far = maxDim * 100;
         
-        // Move camera directly above the board for a top-down view.
-        // We add a tiny amount to Z (0.01) to prevent Gimbal lock with OrbitControls
-        camera.position.set(0, maxDim * 1.2, 0.01);
+        // If the bottom face is +Y, the top face (with the slider) is -Y.
+        camera.position.set(0, -maxDim * 1.2, 0.01);
         camera.updateProjectionMatrix();
         
         // Adjust light shadows to cover the model
