@@ -20,13 +20,13 @@ Preface:
 
 This [slider](https://www.adafruit.com/product/5295) from Adafruit is cool, but it has a problem. It is too small.
 
-![Adafruit Sliders](./assets/IMG_1242.JPG)
+![Adafruit Sliders](./assets-webp/IMG_1242.webp)
 
 It only has 65mm of travel distance for the slider movement.
 
 Fortunately, it was easy to find a longer slider.
 
-![new slider](./assets/IMG_1247.JPG)
+![new slider](./assets-webp/IMG_1247.webp)
 
 This is the PTB0143-2010BPA103, in Bourn's PTB Series. It is a Low Profile Slide Potentiometer.
 
@@ -49,7 +49,7 @@ After my [last blog post](https://hackaday.io/project/205240-usb-to-i2c-demo), [
 
 I never expected to get that kind of recognition for my [last project](https://hackaday.io/project/205240-usb-to-i2c-demo). Also, I do often see [PCBWay](https://www.pcbway.com/) sponsoring YouTubers that I like, so I was excited that they reached out.
 
-![pcbway](./assets/pcbway.png)
+![pcbway](./assets-webp/pcbway.webp)
 
 
 
@@ -59,7 +59,7 @@ The first thing to cover is how a potentiometer works.
 
 And to understand that, let's review a simple voltage divider.
 
-![](./assets/515c8377ce395fa71d000000.png)
+![](./assets-webp/515c8377ce395fa71d000000.webp)
 
 
 The formula is:
@@ -72,11 +72,11 @@ So it lets you split voltages over resistors in series.
 
 Here is an example with some voltage numbers.
 
-![](./assets/fixedvoltdiv.png)
+![](./assets-webp/fixedvoltdiv.webp)
 
 A slide potentiometer is basically just a variable resistor. So it is a resistor that goes between 0 and 10k ohms as you slide it.
 
-![](./assets/var%20resistor.png)
+![](./assets-webp/var%20resistor.webp)
 
 
 They even show circuit diagrams like these straight in the [Bourns slider datasheet.](https://www.bourns.com/docs/Product-Datasheets/PTB.pdf)
@@ -84,13 +84,13 @@ They even show circuit diagrams like these straight in the [Bourns slider datash
 
 I drew this diagram to help compare.
 
-![](./assets/slide%20pot%20schematic.png)
+![](./assets-webp/slide%20pot%20schematic.webp)
 
 In the above image, the two resistors would always add up to 10k in total. I just didn't have a good way to represent that in the drawing.
 
 Now that we understand the voltage divider, the next step is to add a capacitor between the wiper and ground to filter out noise.
 
-![](./assets/slide%20pot%20with%20cap.png)
+![](./assets-webp/slide%20pot%20with%20cap.webp)
 
 
 And I'm sure you're wondering now, what is the other 10k resistor doing in parallel with the circuit?
@@ -107,7 +107,7 @@ More importantly, I vibe coded this beautiful web demo to illustrate the differe
 
 ----- DEMO HERE!!!! TODO ------
 
-![](./assets/voltage%20divider%20vs%20rheostat.png)
+![](./assets-webp/voltage%20divider%20vs%20rheostat.webp)
 
 
 Looking back, it would have been really great to make this easier to switch between these two configurations on the final circuit! A good lesson learned.
@@ -150,28 +150,28 @@ The real world has a lot more noise obviously.
 
 Now we have our chip, we need to hook it up to the rest of the circuit:
 
-![](./assets/ads112c04.png)
+![](./assets-webp/ads112c04.webp)
 
 The analog inputs are pretty easy to connect. AIN0 will go to the wiper of the slide pot, and the rest we just tie to ground. We aren't going to both with AIN2 and AIN3 in this design, and we will just measure the voltage between AIN0 and AIN1.
 
-![](./assets/analog%20inputs.png)
+![](./assets-webp/analog%20inputs.webp)
 
 Next we have some data lines.
 
-![](./assets/data%20lines.png)
+![](./assets-webp/data%20lines.webp)
 
 which will connect to the socket.
 
-![](./assets/socket.png)
+![](./assets-webp/socket.webp)
 
 The datasheet said these should be connect to power with 1k pull-up resistors. And a capacitor was added between power and ground to help with filtering noise.
 
-![](./assets/data%20lines%202.png)
+![](./assets-webp/data%20lines%202.webp)
 
 
 I also set up some jumpers to be able to configure the I2C address of the board.
 
-![](./assets/i2c%20jumpers.png)
+![](./assets-webp/i2c%20jumpers.webp)
 
 
 So in the full schematic, I included these tips I found in my research.
@@ -189,13 +189,13 @@ So in the full schematic, I included these tips I found in my research.
 
 And here is everything all put together!
 
-![](./assets/full%20schematic.png)
+![](./assets-webp/full%20schematic.webp)
 
 The next thing we need to do is pick out the actually parts we want to use to mark the board. That means picking out exactly which capacitor, which resistor, etc.
 
 I found that [partsbox](https://partsbox.com/) is free and is pretty useful to document the list of parts.
 
-![](./assets/partsbox.png)
+![](./assets-webp/partsbox.webp)
 
 Pretty much when I was looking for parts, I would dig through Digikey and Mouser to filter and see what parts are popular for the category.
 
@@ -204,7 +204,7 @@ They are better for causing less interference in the circuit, and letting you ha
 
 I found GRM1555C1E103GE01D from Murata, which is a  0.01uF, surface mount, Multilayer Ceramic Capactior. Specifically, it uses the 0402 footprint, which is about 1mm square.
 
-![](./assets/0402%20footprint.png)
+![](./assets-webp/0402%20footprint.webp)
 
 It's actually amazing that [PCBWay](https://www.pcbway.com/) will solder these tiny capacitors perfectly for you. So I can use them freely on my board, and I don't have to deal with soldering them by hand.
 
@@ -253,7 +253,7 @@ So if I a want to assign C1 to a part, I would open up symbol properties and fil
 
 It looks like this:
 
-![](./assets/symbol%20properties.png)
+![](./assets-webp/symbol%20properties.webp)
 
 This is super important because it will know what footprints to use with which parts of the schematic. And it will let the PCBWay Kicad plugin export the BOM automatically. But more on that later!
 
@@ -265,7 +265,7 @@ Schematic Symbol -> Part Number -> Footprint
 
 So if you look at the menu in Kicad, it should start making sense.
 
-![kicad](./assets/kicad.png)
+![kicad](./assets-webp/kicad.webp)
 
 
 Schematic is the actual diagram. Symbols are symbols on the diagram. Footprints are the geometry that will attach specific parts to the board.
@@ -286,7 +286,7 @@ You'll also want to pay attention to what your manufacturer has available, so yo
 
 For example, PCBWay lets you select the min spacing and min hole size when [ordering online](https://www.pcbway.com/orderonline.aspx).
 
-![](./assets/min%20hole%20size.png)
+![](./assets-webp/min%20hole%20size.webp)
 
 So if your min hole size is .3mmm, you don't want to design a PCB with smaller holes  than that. Basically, you want to know all the dimensions of everything in your design.
 
@@ -300,32 +300,32 @@ I did look up the [assembly capabilities](https://www.pcbway.com/pcb_prototype/P
 
 This means they will deal with my super tiny capacitor! I do not want to try to solder that.
 
-![](./assets/full%20pcb%20design.png)
+![](./assets-webp/full%20pcb%20design.webp)
 
 And here is the rendered version:
 
-![](./assets/rendered%20pcb%20design.png)
+![](./assets-webp/rendered%20pcb%20design.webp)
 
 You can do 3D models of the parts too, but I decided to skip that and trust the footprints. It is a good idea though if you want to take time to verify things will fit together properly in real life.
 
 For exporting files for PCBWay, you can use the [PCBWay Fabrication Toolkit plug-in for Kicad](https://github.com/pcbway/PCBWay-Plug-in-for-Kicad).
 
-![](./assets/pcbway%20fab%20toolkit%20kicad.png)
+![](./assets-webp/pcbway%20fab%20toolkit%20kicad.webp)
 
 You can use when you're in the PCB Editor from the Tools menu.
 
-![](./assets/tools%20pcbway%20plugin.png)
+![](./assets-webp/tools%20pcbway%20plugin.webp)
 
 
 One click and it will export all the files you need.
 
-![](./assets/pcbway%20export.png)
+![](./assets-webp/pcbway%20export.webp)
 
 Just upload the files to PCBWay and you're good to go.
 
 I'll share what my order looked like here too:
 
-![](./assets/pcbway%20order.png)
+![](./assets-webp/pcbway%20order.webp)
 
 The order includes all the parts and assembly too. I will be getting 5 boards, fully assembled, ready to test out as soon as they arrive at my house! I don't have to mess with any soldering and PCBWay went through the work of sourcing all the different parts. By the way, I did only use [Digikey](https://www.digikey.com/) to find what parts they have in stock. PCBWay ordered parts directly from them for my board, and that was included in the cost of the order.
 
